@@ -4,10 +4,6 @@
 
 Obsidian 1.14.5+ 桌面版 · 无运行时依赖 · 无遥测 · MIT
 
-![Amos Extension Manager 插件索引](docs/images/01-封面.png)
-
-*上图为宣传示意图，真实界面见下文截图。*
-
 ## 它解决什么问题
 
 插件装到三十个以上，原生列表就只剩一串英文名：想找「改图标的那个」「能导出 PDF 的那个」，只能挨个点开看。
@@ -39,6 +35,12 @@ Obsidian 1.14.5+ 桌面版 · 无运行时依赖 · 无遥测 · MIT
 - 点徽标或原生「更新」按钮旁的「更新说明」，直接看该版本的 GitHub Release 说明（Markdown 渲染），不必跳浏览器。
 - 按「更新时间」排序，就能看出哪些插件已经很久没动过。
 
+**设置页翻译**
+
+- 点设置侧栏中插件旁的翻译图标，可把该插件设置页的标题、按钮和标签页换成中文，也能随时切回原文。
+- 首批内置 82 条词条，覆盖 Calendar、Dataview、Templater、Advanced Tables、Outliner，离线即可用。
+- 缺失的短标签可选择补翻；只处理已识别的标题与按钮，不改写说明、输入值和下拉选项。
+
 ![已安装插件列表：搜索、排序、状态、分组](docs/images/installed-list.png)
 
 *已安装插件列表：顶部是搜索与排序/状态/分组，卡片内可直接改分组、进插件设置、开关插件。*
@@ -48,7 +50,7 @@ Obsidian 1.14.5+ 桌面版 · 无运行时依赖 · 无遥测 · MIT
 **手动安装**（社区市场里还搜不到本插件时）
 
 1. 从同一次 GitHub Release 下载 `main.js`、`manifest.json`、`styles.css`。
-2. 放入 `<你的笔记库>/.obsidian/plugins/plugin-zh-notes/`。
+2. 放入 `<你的笔记库>/.obsidian/plugins/amos-extension-manager/`。
 3. 打开「设置 → 第三方插件」，刷新列表并启用。
 
 升级时只替换这三个文件，**保留同目录的 `data.json`**——个人备注、分组、筛选偏好和密钥引用都在里面。
@@ -91,13 +93,13 @@ Obsidian 1.14.5+ 桌面版 · 无运行时依赖 · 无遥测 · MIT
 
 ### 补全中文资料
 
-**免费路径**：设置 → Amos Extension Manager →「免费翻译服务」→ 免费补全名称与使用说明。
+**免费路径**：设置 → Extension Index →「免费翻译服务」→ 免费补全名称与使用说明。
 
 - 只补缺失项，已有中文和你的个人备注不会被覆盖。
 - 名称是机器直译，品牌名、缩写可能保留原文。
-- 额度：MyMemory 官方额度为每天 5,000 字符，本插件按每库每天 4,500 字符保守保护；名称与说明的翻译共用同一额度。额度用尽时保留已有结果。
+- 额度：MyMemory 官方额度为每天 5,000 字符，本插件按每库每天 4,500 字符保守保护；名称、说明、设置页补翻共用同一额度。额度用尽时保留已有结果。
 
-**AI 路径**：设置 → Amos Extension Manager →「AI 服务配置」。
+**AI 路径**：设置 → Extension Index →「AI 服务配置」。
 
 1. 选择服务商与模型，填入 API Key。
 2. 点「保存并测试」，只验证连接，不会自动开始批量翻译。
@@ -109,14 +111,14 @@ Obsidian 1.14.5+ 桌面版 · 无运行时依赖 · 无遥测 · MIT
 
 ![本插件设置页：AI 服务配置与免费翻译服务](docs/images/translation-settings.png)
 
-*设置页只有「名称与使用说明」一张卡片；额度、进度与停止按钮都集中在这里。*
+*本插件设置页：两个页签分别管理 AI 服务与免费翻译，额度、进度与停止按钮集中在这里。*
 
 ## 中文资料的范围与质量
 
 - 覆盖范围：2026-11-13 官方目录快照中下载量大于 10 次的 10,253 个插件，另保留 61 条历史条目，合计 10,314 条。
 - 生成方式：一部分依据官方名称与介绍人工核校，一部分为机器翻译初稿并做术语、长度与字段校验。
 - 质量边界：可能存在语义误译或内容滞后，也不代表这些插件经过安全审核或实测。
-- 发现错误请提 [Issue](https://github.com/Frank998-dpf/plugin-zh-notes/issues)，附上插件 ID 与建议译法即可。数据集来源与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+- 发现错误请提 [Issue](https://github.com/huangchen-byte/obsidian-amos-plugin-management/issues)，附上插件 ID 与建议译法即可。数据集来源与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 联网、费用与隐私
 
@@ -127,7 +129,7 @@ Obsidian 1.14.5+ 桌面版 · 无运行时依赖 · 无遥测 · MIT
 | `api.mymemory.translated.net` | 可选的匿名英译中 | 插件名称与公开/本地 manifest 描述，无需密钥 |
 | `raw.githubusercontent.com` | 读取官方社区插件目录 | 一次公开目录请求，不上传已装插件清单 |
 | `api.github.com` | 读取插件作者公开的 README 或 Release 说明 | 目标插件的公开仓库路径与版本号 |
-| 你选择的 AI 接口 | 可选的说明生成、连接测试 | 插件 ID、名称、版本、描述，最多 6,000 字符 README 节选；连接测试是固定短句 |
+| 你选择的 AI 接口 | 可选的说明生成、设置页补翻、连接测试 | 插件 ID、名称、版本、描述，最多 6,000 字符 README 节选；补翻时为插件 ID 与短标签；连接测试是固定短句 |
 
 - 云服务预置连向 `api.deepseek.com`、`dashscope.aliyuncs.com`、`open.bigmodel.cn`、`api.siliconflow.cn`、`api.moonshot.cn`、`api.openai.com`；Ollama 走本机 `localhost`。远程地址必须 HTTPS，HTTP 仅允许本地。
 - **不读取、不上传你的笔记正文和个人备注**，也不访问笔记库以外的文件。
@@ -175,9 +177,10 @@ npm run build   # 校验 src/plugin.js 并同步到 main.js
 npm test        # Node 内置测试运行器
 ```
 
-- 测试覆盖排序/筛选/分组、数据迁移、翻译与 AI 响应解析、Release 说明解析、构建产物一致性等，当前 91 项全部通过。
+- 测试覆盖排序/筛选/分组、数据迁移、翻译与 AI 响应解析、Release 说明解析、构建产物一致性等，当前 65 项全部通过。
 - 修改 `src/plugin.js` 后必须重新 `npm run build`，否则「构建一致」测试会失败。
-- 发版靠打 tag：`manifest.json` 改好版本、`CHANGELOG.md` 补好该版本段落，推一个同名 tag（如 `0.7.0`，不带 `v`）即可。工作流会重新构建、跑测试、确认提交的产物未被改动，再用该版本的 CHANGELOG 段落作为 Release 说明，上传 `main.js`、`manifest.json`、`styles.css`。
+- 发版靠打 tag：`manifest.json` 改好版本、`CHANGELOG.md` 补好该版本段落，推一个同名 tag（如 `0.8.0`，不带 `v`）即可。工作流会重新构建、跑测试、确认提交的产物未被改动，再用该版本的 CHANGELOG 段落作为 Release 说明，上传 `main.js`、`manifest.json`、`styles.css`。
+- GitHub 给每个 Release 自动附带的 `Source code (zip)` 不是插件包，Obsidian 和 BRAT 只认上面三个文件；仓库必须是启用 Actions 的普通仓库，fork 默认不跑工作流。
 - 桌面验收在独立 QA 库完成，自动化测试不能替代真实界面检查。
 
 ## 许可与署名
@@ -188,4 +191,4 @@ npm test        # Node 内置测试运行器
 
 ## 反馈
 
-Bug 与译文纠错请提到 [GitHub Issues](https://github.com/Frank998-dpf/plugin-zh-notes/issues)，尽量附上目标插件 ID 与复现步骤。截图或日志请先移除 API Key、个人路径和笔记内容。
+Bug 与译文纠错请提到 [GitHub Issues](https://github.com/huangchen-byte/obsidian-amos-plugin-management/issues)，尽量附上目标插件 ID 与复现步骤。截图或日志请先移除 API Key、个人路径和笔记内容。
