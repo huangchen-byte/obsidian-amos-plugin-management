@@ -1,152 +1,204 @@
-# Extension Index
+# Extension Index · 插件索引
 
-插件索引
+**给已安装的 Obsidian 第三方插件补上中文别名和用途说明，顺手把排序、筛选、分组和更新查看一起做了。**
 
-This plugin helps you view and organize your installed third‑party Obsidian plugins. It keeps the original plugin names while displaying their Chinese aliases and descriptions.
+Obsidian 1.14.5+ 桌面版 · 无运行时依赖 · 无遥测 · MIT
 
-用于查阅与整理你已安装的 Obsidian 第三方插件，保留插件原名，同步展示中文别名与功能说明；支持设置分组和排序规则，内置 10,314 条插件中文参考资料，也支持自定义备注和 AI 批量分析。
+![Extension Index 插件索引](docs/images/01-封面.png)
 
-![Extension Index 插件索引宣传封面](docs/images/01-封面.png)
+*上图为宣传示意图，真实界面见下文截图。*
 
-*上图为功能宣传示意图，实际界面见下方截图。*
+## 它解决什么问题
 
-## 三步上手 / See it in action
+插件装到三十个以上，原生列表就只剩一串英文名：想找「改图标的那个」「能导出 PDF 的那个」，只能挨个点开看。
 
-1. 打开「设置 → 第三方插件 → 已安装插件」，直接查看原名旁的中文别名和下方的用途说明。左侧插件入口也会分行显示原名与别名。
-2. 在已安装列表搜索原名或中文别名；按需要调整左右两处的排序，或开启「分组显示」并将插件归入自己的分组。
-3. 点击插件名称旁的小铅笔，写下自己的别名和备注。个人修改优先显示，也可以在编辑窗口恢复预置内容。
-4. 在本插件的设置详情中，可以使用免费的翻译功能和配置自己的AI模型，对未翻译的软件补充。
+这个插件在原生「已安装插件」列表上补了三层信息：**中文别名**让你认得出，**中文说明**让你知道它干什么，**时间与更新状态**让你知道它多久没维护了。再配上搜索、状态筛选和手动分组，三十个插件也能一眼定位。
 
-例如，截图中的 `Dataview` 显示为「笔记数据查询」，并被放入「日常工具」分组；这只是测试库里的示例归类，不会预设你的分组。
+它不碰插件本身：不改代码、不改启用状态、不安装也不卸载。
 
 ## 主要功能
 
-- 在侧边栏分行展示插件原名及中文别名；已安装插件列表支持按原名或中文别名搜索，可自定义排序与分组。
-- 支持为插件设置自定义别名、备注和分组，也能随时恢复预置内容；个人编辑内容优先级高于自动生成内容与内置资料库。
-- 内置 10,314 条离线中文参考资料，覆盖 2026-11-13 官方目录快照中累计下载超过 10 次的全部 10,253 个插件，并保留 61 条原有范围外资料。资料可能存在翻译不准确或内容滞后的情况，欢迎通过反馈渠道指正。
-- 可按需联网翻译缺失的插件介绍，或是调用你自行配置的 AI 服务解析插件公开文档。相关功能需手动启用，调用 AI 服务可能产生费用。
+**中文资料**
 
-![已安装插件列表：中文别名、独立排序与手动分组](docs/images/PixPin_2026-11-02_21-50-00.png)
+- 内置 10,314 条离线中文别名与说明，命中即用，不需要联网。
+- 个人备注优先于生成缓存，生成缓存优先于内置资料；自己写的内容永远不会被自动覆盖，也可随时恢复预置。
+- 缺失条目可免费联网补全，或用你自行配置的 AI 服务依据公开资料生成；两条路径都需手动触发。
 
-*实际界面示例。免费翻译补全缺少的中文名称与说明，不覆盖个人备注；AI 分析需要自行配置服务。*
+**列表管理**
 
-离线资料和个人备注无需联网。本插件不会读取或发送你的笔记正文或个人备注；联网翻译会发送插件名称和描述，AI 分析可附带公开 README 摘录。仅支持 Obsidian 1.14.5 及以上桌面版，界面目前为中文。按时间排序使用插件文件夹的创建时间，它不一定等于安装时间。本插件不负责安装、更新或卸载其他插件。
+- 双列卡片布局，同一行卡片等高；每张卡片显示原名、中文别名、中文说明、可折叠的原文说明，以及安装与更新时间。
+- 搜索：同时匹配原名、中文别名和说明文字。
+- 排序：默认顺序、原名 A→Z、原名 Z→A、更新时间最新优先 / 最早优先。
+- 状态筛选带计数：全部、已启用 N、已禁用 N、待更新 N。
+- 分组：手动建组、卡片内直接改归属、按组筛选；分组只影响显示，不改启用状态。
+- 顶栏统计「总计 / 启用 / 禁用 / 待更新」，设置左侧导航同步显示编号与中文别名。
 
-## Requirements / 运行要求
+**更新查看**
 
-- Obsidian **1.14.5 or later** on desktop. Mobile support has not been verified and is not declared.
-- Chinese interface and Chinese generated output. Plugin-list integration uses native settings DOM and may require adaptation after future Obsidian updates.
-- No runtime dependencies, telemetry, account requirement for offline use, or hosted backend operated by this project.
+- Obsidian 检查更新后，「待更新」筛选和卡片上的 `↑ v2.12.0` 徽标会亮起。
+- 点徽标或原生「更新」按钮旁的「更新说明」，直接看该版本的 GitHub Release 说明（Markdown 渲染），不必跳浏览器。
+- 按「更新时间」排序，就能看出哪些插件已经很久没动过。
 
-## Install / 安装
+**设置页翻译**
 
-Community-store availability is shown on the [directory listing](https://community.obsidian.md/plugins/plugin-zh-notes). If the entry is still under review, use a published GitHub release for manual installation.
+- 点设置侧栏中插件旁的翻译图标，可把该插件设置页的标题、按钮和标签页换成中文，也能随时切回原文。
+- 首批内置 82 条词条，覆盖 Calendar、Dataview、Templater、Advanced Tables、Outliner，离线即可用。
+- 缺失的短标签可选择补翻；只处理已识别的标题与按钮，不改写说明、输入值和下拉选项。
 
-For manual installation, download `main.js`, `manifest.json`, and `styles.css` from the same published GitHub release. Put them in `<your vault configuration directory>/plugins/plugin-zh-notes/`, reload the plugin list, and enable it. When updating, preserve your existing `data.json`.
+![已安装插件列表：搜索、排序、状态、分组](docs/images/installed-list.png)
 
-Do not treat a draft release or this repository's default branch as a published installable version. Release tags use the exact manifest version, without a `v` prefix.
+*已安装插件列表：顶部是搜索与排序/状态/分组，卡片内可直接改分组、进插件设置、开关插件。*
 
-## Use / 使用方法
+## 安装
 
-1. Open **Settings → Community plugins → Installed plugins**. 中文别名和说明直接显示在已安装列表中；左侧插件设置入口显示原名和中文别名。
-2. 左右两处可分别选择排序。已安装插件列表支持按中文别名搜索；打开「分组显示」，通过「管理分组」新建分组，并在插件行选择归属。
-3. Click the small pencil next to a plugin name to edit your alias and description. Restore defaults through the same editor when needed.
-4. Open **Settings → Extension Index → 免费翻译** to fill missing Chinese names and descriptions. Existing Chinese descriptions are reused to save quota. Names use machine translation, so brands and abbreviations may remain untranslated. Existing personal notes are preserved.
-5. Open **AI 服务配置**, select a provider and model, enter your API key, and click **保存并测试**. This only saves and tests the connection. Then use step 3, **AI 翻译名称与使用说明**, for plugin descriptions. Interface translation remains available from each plugin’s sidebar icon; **免费翻译服务** explains the free fallback.
+**手动安装**（社区市场里还搜不到本插件时）
 
-AI provider presets include DeepSeek, Qwen (Beijing), GLM, SiliconFlow, Kimi (China), OpenAI, local Ollama, and a custom compatible endpoint. The base URL is under advanced options. Model names and account permissions can change; a custom model ID can be entered.
+1. 从同一次 GitHub Release 下载 `main.js`、`manifest.json`、`styles.css`。
+2. 放入 `<你的笔记库>/.obsidian/plugins/plugin-zh-notes/`。
+3. 打开「设置 → 第三方插件」，刷新列表并启用。
 
-停止按钮会阻止后续请求并丢弃迟到结果；已经发出的请求仍可能在服务商端完成和计费。已有生成缓存优先于新版内置资料；需要查看新版预置时，通过编辑窗口恢复预置。
+升级时只替换这三个文件，**保留同目录的 `data.json`**——个人备注、分组、筛选偏好和密钥引用都在里面。
 
-## Network use, costs and privacy / 联网、费用与隐私
+仓库默认分支和草稿 Release 不是可安装版本。正式 Release 的 tag 与 `manifest.json` 的版本号完全一致，不带 `v` 前缀。
 
-Offline references and personal editing work without network requests. Network actions occur only when you explicitly request translation, AI analysis, or an AI connection test.
+## 使用
 
-| Service | Purpose | Data sent |
-|---|---|---|
-| `api.mymemory.translated.net` | Optional anonymous English-to-Chinese translation | Plugin name and public/local manifest description; no API key |
-| `raw.githubusercontent.com` | Read the official community plugin catalog | A request for the public catalog; not an uploaded inventory of installed plugins |
-| `api.github.com` | Fetch a plugin author's public README for AI analysis | The public repository path of the target plugin |
-| Your selected AI endpoint | Optional analysis or connection test | Plugin ID, name, version, description and at most 6,000 characters of README excerpt; a connection test sends a short synthetic prompt |
+### 列表工具栏
 
-Cloud AI presets connect to `api.deepseek.com`, `dashscope.aliyuncs.com`, `open.bigmodel.cn`, `api.siliconflow.cn`, `api.moonshot.cn`, or `api.openai.com`. Ollama uses your local `localhost` service. A custom endpoint sends the same analysis payload to the host you configure. Remote API connections require HTTPS; HTTP is allowed only for local endpoints.
+打开「设置 → 第三方插件 → 已安装插件」，列表顶部会多出一条工具栏：
 
-**The plugin does not read or send your note contents or personal plugin annotations for translation or AI analysis.** It reads installed plugin manifests from the vault's own configuration directory. It does not access files outside the vault. Normal IP address and HTTP metadata are visible to the remote services you contact.
+| 控件 | 作用 |
+| --- | --- |
+| 搜索框 | 按原名、中文别名、说明文字过滤 |
+| 排序 | 默认顺序 / 原名 A→Z / 原名 Z→A / 更新时间最新 / 更新时间最早 |
+| 状态 | 全部、已启用、已禁用、待更新（均带数量） |
+| 分组 | 全部分组 / 未分组 / 自建分组 |
+| 管理分组 | 新建、改名、排序、删除分组 |
+| 统计行 | 总计 / 启用 / 禁用 / 待更新，不随筛选变化 |
 
-**Costs:** the plugin itself is free. Optional AI services may require an account, API key, and payment; a connection test may incur a small API charge. For the official directory, the appropriate payment classification is **Optional payment**. Existing ChatGPT subscriptions do not necessarily include API credit.
+### 卡片上的元素
 
-MyMemory documents an anonymous allowance of 5,000 characters per day. The plugin applies a conservative local budget of 4,500 characters per vault per UTC day. The service may count shared IP traffic differently; this is not a guarantee of available quota. Failed requests and rate limits preserve existing data.
+| 元素 | 说明 |
+| --- | --- |
+| 铅笔图标 | 编辑个人别名与说明，可恢复预置内容 |
+| `↑ vX` 徽标 | 有新版可更新，点击查看该版本更新说明 |
+| 更新说明 | 原生「更新」按钮左侧，作用同上 |
+| 分组下拉 | 把插件归入某个分组 |
+| 齿轮 | 打开该插件自己的设置页 |
+| 开关 | 启用 / 禁用，等同原生开关 |
+| 安装时间 | 插件文件夹的创建时间 |
+| 更新时间 | `manifest.json` 与 `main.js` 中较晚的修改时间 |
 
-Personal notes, generated caches, provider settings, key references, and translation-budget records are stored in this plugin's `data.json`. API key values are stored using Obsidian SecretStorage, not plaintext fields in that JSON file. SecretStorage is managed by Obsidian and is not a per-plugin security sandbox or a cross-device synchronization guarantee. Re-enter AI keys on another computer when necessary.
+两个时间都是**本地文件时间**。复制、恢复或同步笔记库可能改变它们；「更新时间」反映文件被安装或覆盖的时间，不完全等于作者发布该版本的日期，但用来判断「很久没更新」足够用。
 
-Service policies: [MyMemory terms](https://mymemory.translated.net/doc/usagelimits.php), [GitHub privacy](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement). Your chosen AI provider's data handling also applies. There is no project-operated telemetry or translation proxy.
+### 分组
 
-## Compatibility and data / 兼容与数据
+点「管理分组」新建分组，然后在卡片底部的下拉里选择归属。分组会出现在筛选下拉和分组标题下；删除分组后，插件自动回到「未分组」。
 
-Personal notes → generated cache → bundled reference is the lookup priority. Upgrading preserves existing `data.json`; schema-1 notes are read compatibly and migrate only on a subsequent save. Back up `data.json` before downgrading or deleting the plugin folder. This project does not implement cross-vault synchronization.
+### 补全中文资料
 
-The left settings navigation keeps each original plugin name on the first line and shows its Chinese alias below. The Installed plugins list has a separate search box that matches original names and Chinese aliases; Obsidian's native search may not match the added aliases. Compatibility with other plugins that rewrite the same settings list is not guaranteed. The runtime does not install or update itself or other plugins.
+**免费路径**：设置 → Extension Index →「免费翻译服务」→ 免费补全名称与使用说明。
 
-## Development / 开发
+- 只补缺失项，已有中文和你的个人备注不会被覆盖。
+- 名称是机器直译，品牌名、缩写可能保留原文。
+- 额度：MyMemory 官方额度为每天 5,000 字符，本插件按每库每天 4,500 字符保守保护；名称、说明、设置页补翻共用同一额度。额度用尽时保留已有结果。
 
-This is a plain CommonJS JavaScript plugin. `src/plugin.js` is the authoritative source. `npm run build` checks it and copies its exact bytes to the runtime asset `main.js`, including the embedded MIT notices. There is no transpilation, minification, or executable download. The compact array near the top is the bundled text reference dataset, not obfuscated program logic.
+**AI 路径**：设置 → Extension Index →「AI 服务配置」。
+
+1. 选择服务商与模型，填入 API Key。
+2. 点「保存并测试」，只验证连接，不会自动开始批量翻译。
+3. 回到「翻译名称与使用说明」点击执行。
+
+预置 DeepSeek、通义千问（北京）、智谱 GLM、硅基流动、Kimi、OpenAI、本地 Ollama，以及任意兼容 Chat Completions 的自建地址（模型名可手填）。生成依据是插件介绍与公开 README 节选（最多 6,000 字符），**不读取你的笔记内容**。
+
+停止按钮会阻止后续请求并丢弃迟到结果；已经发出的请求仍可能在服务商侧完成并计费。
+
+### 设置页翻译
+
+设置侧栏中每个第三方插件旁有一个翻译图标，点开可：
+
+- **显示中文 / 显示原文**：按插件切换，内置译文离线生效。
+- **补翻新增**：只收集当前已打开设置页里可识别的短英文标签，按批请求并逐批保存。
+- 处理范围是分组标题、设置项名称、按钮和标签页；说明文字、输入内容、下拉选项和插件源码不会被改写。
+
+![本插件设置页：AI 服务配置与免费翻译服务](docs/images/translation-settings.png)
+
+*本插件设置页：两个页签分别管理 AI 服务与免费翻译，额度、进度与停止按钮集中在这里。*
+
+## 中文资料的范围与质量
+
+- 覆盖范围：2026-11-13 官方目录快照中下载量大于 10 次的 10,253 个插件，另保留 61 条历史条目，合计 10,314 条。
+- 生成方式：一部分依据官方名称与介绍人工核校，一部分为机器翻译初稿并做术语、长度与字段校验。
+- 质量边界：可能存在语义误译或内容滞后，也不代表这些插件经过安全审核或实测。
+- 发现错误请提 [Issue](https://github.com/Frank998-dpf/plugin-zh-notes/issues)，附上插件 ID 与建议译法即可。数据集来源与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 联网、费用与隐私
+
+离线资料、个人备注、排序分组都不联网。只有你主动点翻译、AI 分析或更新说明时才会发请求。
+
+| 服务 | 用途 | 发送的内容 |
+| --- | --- | --- |
+| `api.mymemory.translated.net` | 可选的匿名英译中 | 插件名称与公开/本地 manifest 描述，无需密钥 |
+| `raw.githubusercontent.com` | 读取官方社区插件目录 | 一次公开目录请求，不上传已装插件清单 |
+| `api.github.com` | 读取插件作者公开的 README 或 Release 说明 | 目标插件的公开仓库路径与版本号 |
+| 你选择的 AI 接口 | 可选的说明生成、设置页补翻、连接测试 | 插件 ID、名称、版本、描述，最多 6,000 字符 README 节选；补翻时为插件 ID 与短标签；连接测试是固定短句 |
+
+- 云服务预置连向 `api.deepseek.com`、`dashscope.aliyuncs.com`、`open.bigmodel.cn`、`api.siliconflow.cn`、`api.moonshot.cn`、`api.openai.com`；Ollama 走本机 `localhost`。远程地址必须 HTTPS，HTTP 仅允许本地。
+- **不读取、不上传你的笔记正文和个人备注**，也不访问笔记库以外的文件。
+- 插件本身免费；AI 服务需自备账号与密钥，可能产生费用，连接测试也会计一次调用。
+- 无项目自建服务器、无遥测、无埋点、无翻译代理。
+- API Key 存放在 Obsidian 的 SecretStorage，不写进 `data.json`；SecretStorage 由 Obsidian 管理，不保证跨设备同步。
+
+## 数据与兼容性
+
+| 文件 | 内容 |
+| --- | --- |
+| `data.json` | 个人别名与说明、生成缓存、分组与筛选偏好、翻译用量、AI 服务配置（不含密钥明文） |
+| `release-notes.json` | 更新说明缓存，可随时删除，下次打开重新拉取 |
+| SecretStorage | API Key，由 Obsidian 保管 |
+
+- 升级保留 `data.json`；降级或删除插件目录前请先备份。
+- 只支持桌面版（`isDesktopOnly`），移动端未做验证也不在声明范围内。
+- 与其它重写同一设置列表的插件可能冲突；Obsidian 若改动设置面板结构，本插件需要相应适配。
+- 本插件不负责安装、更新或卸载其他插件，「更新」按钮始终是 Obsidian 原生的。
+
+## 常见问题
+
+**为什么有的插件没有中文别名？**
+品牌名或缩写（如 Templater）会保留原文；内置资料未覆盖时可以手写，或用 AI / 免费翻译补。
+
+**为什么看不到「待更新」徽标？**
+Obsidian 要先查到新版本。到「已安装插件」页点一次「检查更新」，徽标与筛选计数才会出现。
+
+**「更新时间」和版本发布日期为什么对不上？**
+它取的是本地 `manifest.json` / `main.js` 的修改时间：升级会刷新，手动覆盖也会刷新。作者发布新版本但你没更新时，这个时间不会变。
+
+**免费额度用完了怎么办？**
+换用自己配置的 AI 服务，或等次日 UTC 重置。已有译文不重复消耗额度。
+
+**会修改我的笔记吗？**
+不会。插件只读插件目录里的 `manifest.json`、`styles.css` 等文件，以及笔记库配置目录内的插件信息。
+
+## 开发
+
+`src/plugin.js` 是唯一源码，纯 CommonJS，无转译、无打包、无运行时依赖；`main.js` 由构建脚本原样复制生成。
 
 ```bash
 npm ci
-npm run build
-npm test
+npm run build   # 校验 src/plugin.js 并同步到 main.js
+npm test        # Node 内置测试运行器
 ```
 
-`build` can regenerate `main.js` from a clean checkout even when the output is absent. Tests use Node's built-in runner, including a clean-directory regeneration check. Node 22 or later is recommended; no npm runtime dependencies are required. CI verifies tests and that regenerated release assets match the committed bytes. Release automation creates **drafts only**.
+- 测试覆盖排序/筛选/分组、数据迁移、翻译与 AI 响应解析、Release 说明解析、构建产物一致性等，当前 91 项全部通过。
+- 修改 `src/plugin.js` 后必须重新 `npm run build`，否则「构建一致」测试会失败。
+- 发布由自动化创建**草稿** Release，tag 使用 `manifest.json` 的版本号；桌面验收在独立 QA 库完成，自动化测试不能替代真实界面检查。
 
-Desktop validation uses a dedicated QA vault with disabled manifest-only fixture plugins. Automated checks do not substitute for the official preview scan or physical-device tests.
+## 许可与署名
 
-## License and attribution / 许可与署名
+插件实现与本地整理：**Copyright (c) 2026 Frank998-dpf**，[MIT](LICENSE)。
 
-Original plugin implementation and local curation: **Copyright (c) 2026 Frank998-dpf**, licensed under [MIT](LICENSE).
+内置中文资料派生自 [miaoziguan/obsidian-chinese-plugin-market](https://github.com/miaoziguan/obsidian-chinese-plugin-market)（固定提交 `c14006e`，MIT，**Copyright (c) 2024 羽鳞君 (miaoziguan)**），并依据官方社区目录做了字段筛选、清理与部分改写；未复制任何上游插件运行时代码。完整声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，上游 MIT 许可全文同时内嵌在 `main.js` 中。
 
-The bundled Chinese reference dataset derives from [miaoziguan/obsidian-chinese-plugin-market](https://github.com/miaoziguan/obsidian-chinese-plugin-market), fixed commit `c14006e74c678cf63174ae4de72a2a8e9832e253`, under MIT, **Copyright (c) 2024 羽鳞君 (miaoziguan)**. Dataset fields were selected, cleaned, and partly rewritten against the official community catalog. No upstream plugin runtime code was copied. Full third-party notice: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## 反馈
 
-The complete upstream MIT notice is also embedded in `main.js`, so it is retained when Obsidian installs only the standard runtime assets.
-
-## Support / 反馈
-
-Report bugs or specific translation corrections in [GitHub Issues](https://github.com/Frank998-dpf/plugin-zh-notes/issues). Include the target plugin ID and a short description; remove API keys, personal paths, and private note content before attaching logs or screenshots.
-
-## 插件设置页翻译
-
-设置仅保留“AI 服务配置”“免费翻译服务”两个页签。AI 页分为三步：配置 AI 服务、保存并测试、点击翻译插件中文名称与使用说明。两个 AI 功能共享服务与密钥；“保存并测试”始终只验证连接，不会自动开始批量翻译。免费页提供名称与说明的缺失补全，并说明设置页翻译入口。两类服务分别统计任务与进度，按钮明确标注处理范围及插件数量。
-
-设置页优先使用内置及已保存词典，无缺失时不弹窗、不联网。有新增词条且 AI 尚未配置并测试时，会提示“未配置 AI 翻译，将优先使用免费的翻译服务，但是免费翻译服务的质量和额度是受限制的。”用户可选择“否，取消”“配置 AI 设置”“是，使用免费翻译”。取消或关闭弹窗不发请求；配置按钮只跳转 AI 页，由用户保存、测试，再点击第三步翻译名称与说明，不自动恢复原任务。明确同意后才使用 MyMemory 免费服务。已配置但连接失败时提示检查服务地址与运行状态，不将普通本机接口一律称为 Ollama。侧栏翻译图标为 13px 淡灰线条、无底色，悬停或键盘聚焦时加深。
-
-设置侧栏中，每个第三方插件旁的翻译图标可打开操作浮层。内置译文默认离线应用，可按插件选择“显示原文”或“显示中文”。范围是可识别的分组标题、设置项名称、按钮和标签页文字；说明、输入内容、下拉选项、笔记正文和插件源码不被改写。
-
-首批为 Calendar、Dataview、Templater、Advanced Tables、Outliner，共 82 条。词典按插件 ID 精确匹配，不保证覆盖全部设置或未来版本的语义变化。原文未变时复用；改名、新控件和新设置可能需补翻或人工维护。
-
-“补翻新增”仅收集当前已打开设置页中可识别的短英文标签，不扫描完整源码。已配置并测试的 AI 服务每组最多 20 条、两组并发、逐组保存；用户同意使用免费服务时，沿用现有免费额度保护，逐条请求和保存。失败后重试跳过已有结果。展开折叠项或进入子页后可再次补翻。未配置 AI 时，内置词典仍可使用。补翻标签可能包含目标插件动态插入的上下文，开始前应核对当前页面。密钥继续使用现有 SecretStorage 配置，不写入词典。取消会阻止后续写入，服务端已经接收的请求仍可能继续执行。
-
-### 词库维护依据
-
-核对日期：2026-11-10。以下链接固定到当次核对提交；仅依据公开设置标签独立编写译文，未复制这些插件或 Chinese UI Translator 的实现代码。
-
-| 插件 ID | 词条数 | 核对源码 |
-| --- | ---: | --- |
-| calendar | 11 | [Calendar settings](https://github.com/liamcain/obsidian-calendar-plugin/blob/ef3f2696da11aa1d11a272179caea062d6144640/src/settings.ts) |
-| dataview | 27 | [Dataview settings](https://github.com/blacksmithgu/obsidian-dataview/blob/5ad0994ff384cbb797de382e7edff2388141b73a/src/main.ts) |
-| templater-obsidian | 28 | [Templater settings](https://github.com/SilentVoid13/Templater/blob/006dc61f64902dc9c72cad15c26b988576339719/src/settings/Settings.ts) |
-| table-editor-obsidian | 4 | [Advanced Tables settings](https://github.com/tgrosinger/advanced-tables-obsidian/blob/1a222399690f1d014d4bc95bf9ccf162ee5d7c75/src/main.ts) |
-| obsidian-outliner | 12 | [Outliner settings](https://github.com/vslinko/obsidian-outliner/blob/9ce277885c5a2db002b6d0b926ab4b1ec167791e/src/features/SettingsTab.ts) |
-
-数据集中维护于 `src/plugin.js` 的 `UI_BUILTINS`，与插件名称/用途的 `BUILTINS` 分开。补翻结果优先于内置词典，关闭状态及补翻结果随现有插件配置保存，个人备注不受影响。新增词条应核对源码和实际设置页，构建及测试后在独立 Obsidian 库验收；不要仅因版本号变化判定译文仍然正确。
-
-本次桌面验收：Obsidian 1.15.0，独立库 plugin-zh-notes-qa；Calendar 1.5.10、Dataview 0.5.68、Templater 2.26.0、Advanced Tables 0.23.2、Outliner 4.11.0。新版本额外标签仅做源码核对，尚未逐项实机验收。设置页翻译已补做真实 DeepSeek 回归，详见下文。
-
-新版交互回归：78 项自动测试通过；真实 Obsidian 设置窗口验证两个页签、AI 三步流程、服务选择的取消/配置/免费三个分支、免费译文缓存复用。免费路径验证使用受控响应且恢复测试状态，未调用真实付费 API。图标保持 13px 淡灰无底色。
-
-### 设置页翻译可靠性修复与回归
-
-界面译文允许品牌名、缩写及格式名保留原文，不再以“必须含汉字”作为格式要求；空值、错误类型、异常 HTML/控制字符及占位符损坏仍会拒绝。已安装插件的名称和 ID 从候选中排除。有效字段逐批保存，无效字段单列，可在翻译浮层查看原因并补翻；英文保留结果也会缓存，避免重复请求。两组并发与取消保护保持不变。
-
-已识别控件逐个处理其文字节点，保留 SVG 与事件，跳过输入值、说明、代码和嵌套控件。Copilot 的无语义设置标签仅在其自身设置根节点应用已核实的类名规则；没有扩大为任意普通 div 扫描。切页会关闭旧翻译浮层。
-
-2026-11-10 验证：82 项自动测试通过，真实 DOM 检查 SVG、事件、原文恢复及输入值保护通过。使用现有 DeepSeek / deepseek-flash 对同一安装清单做 28 次真实请求：15 个有英文设置标签的页面，按插件分别计 385 条，其中 362 条译为中文、23 条保留原文。Remotely Save 首次出现 20 条编号字段缺失，其余 99 条保存；只重试这 20 条后失败归零。该结果覆盖当前页面及原生折叠项，未穷举所有自定义子页，不构成完整语义质量或未来版本兼容保证。
+Bug 与译文纠错请提到 [GitHub Issues](https://github.com/Frank998-dpf/plugin-zh-notes/issues)，尽量附上目标插件 ID 与复现步骤。截图或日志请先移除 API Key、个人路径和笔记内容。
