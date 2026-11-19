@@ -1,3 +1,14 @@
+# 0.7.0
+
+- Read pending updates inside Obsidian: click the `↑ vX` badge or the new button beside the native Update button to see that version's GitHub release notes, rendered as Markdown. Falls back to the Atom feed when the API is rate limited and caches the result locally.
+- Add a toolbar to the installed list: search across original names, Chinese aliases and descriptions; a status filter with counts; a group filter; and a group manager for renaming, reordering and deleting groups.
+- Fix filtering so plugins outside the selected group are hidden, instead of only reordering the current group.
+- Number plugins in the settings sidebar and installed list according to the current sort, and show the original name above the Chinese alias.
+- Show install and update times on each card. Update time now uses the newer modification time of `manifest.json` and `main.js` rather than the plugin folder timestamp.
+- Replace the two folder-creation-time sort options with plugin update time, newest and oldest first, so plugins that have not been updated for a long time are easy to spot.
+- Keep cards in the same row the same height and stop card controls from wrapping into extra rows in narrow windows.
+- Rewrite the README for the current feature set and replace the outdated screenshots.
+
 # 0.6.7
 
 - Keep the settings translation popover inside the active Settings modal so it shares the modal stacking context, with a body fallback outside modal pages.
