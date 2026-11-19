@@ -1,13 +1,13 @@
 {
   "name": "plugin-zh-notes",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Chinese aliases and explanations for installed Obsidian community plugins.",
   "private": true,
   "license": "MIT",
-  "author": "Frank998-dpf",
+  "author": "huangchen-byte",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Frank998-dpf/plugin-zh-notes.git"
+    "url": "https://github.com/huangchen-byte/obsidian-amos-plugin-management.git"
   },
   "scripts": {
     "build": "node scripts/build.cjs",

@@ -1,3 +1,10 @@
+# 0.8.0
+
+- Rename the plugin to Amos Extension Manager. The plugin ID stays `plugin-zh-notes`, so existing settings, notes, groups and API keys keep working.
+- Remove the settings-page translation feature entirely: the translation icon is gone from the settings sidebar, along with the built-in and supplementary dictionaries, the DOM rewriting and the per-plugin toggles. The plugin now only translates plugin names and descriptions.
+- Leave any existing `uiTranslations` data in `data.json` untouched — it is no longer read, but it is not deleted either.
+- Publish `main.js`, `manifest.json` and `styles.css` as release assets so the plugin can be installed and updated by Obsidian and BRAT.
+
 # 0.7.0
 
 - Read pending updates inside Obsidian: click the `↑ vX` badge or the new button beside the native Update button to see that version's GitHub release notes, rendered as Markdown. Falls back to the Atom feed when the API is rate limited and caches the result locally.
