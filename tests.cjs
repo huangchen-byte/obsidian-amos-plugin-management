@@ -20,12 +20,42 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, "main.js"), "utf8") +
-  "\nmodule.exports.testAPI = { BUILTINS, managementData, sortPlugins, rowEnabled, parseData, getNote, chunks, endpointUrl, aiNote, fingerprint, ChineseNotesSettings, PROVIDERS, settingsSignature, needsTranslation };", context);
+  "\nmodule.exports.testAPI = { BUILTINS, managementData, sortPlugins, rowEnabled, parseData, getNote, chunks, endpointUrl, aiNote, fingerprint, ChineseNotesSettings, PROVIDERS, settingsSignature, needsTranslation, releaseTagCandidates, sameTag, updateTargetOf };", context);
 const Plugin = context.module.exports;
 const { parseData, getNote } = Plugin.testAPI;
 const { chunks, endpointUrl, aiNote, fingerprint } = Plugin.testAPI;
 const { ChineseNotesSettings } = Plugin.testAPI;
 const { PROVIDERS, settingsSignature, needsTranslation } = Plugin.testAPI;
+const { releaseTagCandidates, sameTag, updateTargetOf } = Plugin.testAPI;
+
+test("更新说明：tag 候选同时覆盖 2.12.0 与 v2.12.0 两种写法", () => {
+  // 跨 realm 的数组不能直接 deepEqual，用 JSON 串比
+  assert.equal(JSON.stringify(releaseTagCandidates("2.12.0")), JSON.stringify(["2.12.0", "v2.12.0"]));
+  assert.equal(JSON.stringify(releaseTagCandidates("v2.12.0")), JSON.stringify(["v2.12.0", "2.12.0"]));
+  assert.equal(JSON.stringify(releaseTagCandidates("")), JSON.stringify([]));
+  assert.equal(sameTag("v2.12.0", "2.12.0"), true);
+  assert.equal(sameTag("V2.12.0", "2.12.0"), true);
+  assert.equal(sameTag("v2.12.0", "2.11.1"), false);
+  assert.equal(sameTag("", ""), false);
+});
+
+test("更新说明：仓库与目标版本取自 app.plugins.updates，非法值一律丢弃", () => {
+  const app = {
+    plugins: {
+      updates: {
+        "custom-sidebar-icons": { repo: "Raven-Pensieve/obsidian-custom-icons", version: "2.12.0" },
+        "bad-repo": { repo: "not a repo", version: "1.0.0" },
+        "no-repo": { version: "1.0.0" },
+      },
+    },
+  };
+  assert.equal(JSON.stringify(updateTargetOf(app, "custom-sidebar-icons")),
+    JSON.stringify({ repo: "Raven-Pensieve/obsidian-custom-icons", version: "2.12.0" }));
+  assert.equal(updateTargetOf(app, "bad-repo"), null);
+  assert.equal(updateTargetOf(app, "no-repo"), null);
+  assert.equal(updateTargetOf(app, "absent"), null);
+  assert.equal(updateTargetOf(null, "absent"), null);
+});
 
 function plugin() {
   const result = new Plugin();
@@ -512,12 +542,16 @@ test("旧版数据新增管理设置时不丢备注、缓存与 AI 配置", () =
   assert.equal(migrated.management.sidebarSort, "default");
 });
 
-test("时间排序将未知时间置后，同一时间保留原顺序；原名数字自然排序", () => {
+test("更新时间排序将未知时间置后，同一时间保留原顺序；原名数字自然排序", () => {
   const { sortPlugins } = Plugin.testAPI;
-  const items = [{ name: "Plugin 10", index: 0, ctime: null }, { name: "Plugin 2", index: 1, ctime: 200 },
-    { name: "Alpha", index: 2, ctime: 100 }, { name: "beta", index: 3, ctime: 200 }];
+  const items = [{ name: "Plugin 10", index: 0, mtime: null }, { name: "Plugin 2", index: 1, mtime: 200 },
+    { name: "Alpha", index: 2, mtime: 100 }, { name: "beta", index: 3, mtime: 200 }];
   assert.deepEqual(Array.from(sortPlugins(items, "new"), (p) => p.index), [1, 3, 2, 0]);
   assert.deepEqual(Array.from(sortPlugins(items, "old"), (p) => p.index), [2, 1, 3, 0]);
+  // 只按更新时间，创建时间不参与：ctime 很大的旧插件不会跑到前面
+  const mixed = [{ name: "A", index: 0, ctime: 999, mtime: 100 }, { name: "B", index: 1, ctime: 1, mtime: 300 }];
+  assert.deepEqual(Array.from(sortPlugins(mixed, "new"), (p) => p.index), [1, 0]);
+  assert.deepEqual(Array.from(sortPlugins(mixed, "old"), (p) => p.index), [0, 1]);
   assert.deepEqual(Array.from(sortPlugins(items, "az"), (p) => p.index), [2, 3, 1, 0]);
   assert.deepEqual(Array.from(sortPlugins(items, "default"), (p) => p.index), [0, 1, 2, 3]);
   assert.equal(items[0].index, 0);
@@ -554,6 +588,27 @@ test("分组新增重命名删除持久化，重复名称拒绝，删除归属�
   assert.equal(p.data.management.groups.length, 0);
 });
 
+test("分组可上移下移排序，越界时保持原顺序", async () => {
+  const p = plugin();
+  await p.changeGroup(null, "甲");
+  await p.changeGroup(null, "乙");
+  // 跨 realm 的数组原型不同，deepEqual 会误判；统一转字符串比较
+  const names = () => p.data.management.groups.map((g) => g.name).join(",");
+  assert.equal(names(), "甲,乙");
+  const [a, b] = p.data.management.groups.map((g) => g.id);
+  await p.moveGroup(b, -1);
+  assert.equal(names(), "乙,甲");
+  await p.moveGroup(b, -1);   // 已在首位，越界不动
+  assert.equal(names(), "乙,甲");
+  await p.moveGroup(a, 1);    // 已在末位，越界不动
+  assert.equal(names(), "乙,甲");
+  await p.moveGroup(a, -1);
+  assert.equal(names(), "甲,乙");
+  await assert.rejects(p.moveGroup("g-missing", 1), /不存在/);
+  const loaded = parseData(JSON.parse(JSON.stringify(p.data)));
+  assert.equal(loaded.management.groups.map((g) => g.name).join(","), "甲,乙");
+});
+
 test("分组保存失败保留旧状态，并发保存不丢失其他管理设置", async () => {
   const p = plugin();
   p.saveData = async () => { throw new Error("写入失败"); };
@@ -578,18 +633,29 @@ test("管理配置忽略非法分组、重复名称和失效归属", () => {
   assert.equal(m.listSort, "default");
 });
 
-test("读取插件文件夹创建时间失败时仍返回插件，不以修改时间替代", async () => {
+test("读取插件文件夹创建时间失败时仍返回插件，更新时间优先取插件文件时间", async () => {
   const p = plugin();
   p.app.vault = { configDir: ".obsidian", adapter: {
-    exists: async () => true, list: async () => ({ folders: [".obsidian/plugins/a", ".obsidian/plugins/b"] }),
-    read: async (path) => JSON.stringify({ id: path.includes("/a/") ? "a" : "b", name: "Example" }),
-    stat: async (path) => { if (path.endsWith("/a")) return { type: "folder", ctime: 123, mtime: 999 }; throw new Error("不可用"); },
+    exists: async () => true,
+    list: async () => ({ folders: [".obsidian/plugins/a", ".obsidian/plugins/b", ".obsidian/plugins/c"] }),
+    read: async (path) => JSON.stringify({ id: path.split("/")[2], name: "Example" }),
+    stat: async (path) => {
+      if (path.endsWith("/a")) return { type: "folder", ctime: 123, mtime: 999 };
+      if (path === ".obsidian/plugins/c/manifest.json") return { type: "file", mtime: 4000 };
+      if (path === ".obsidian/plugins/c/main.js") return { type: "file", mtime: 5000 };
+      if (path.endsWith("/c")) return { type: "folder", ctime: 111, mtime: 100 };
+      throw new Error("不可用");
+    },
   } };
   p.readManifest = Plugin.prototype.readManifest;
   const items = await p.installedManifests();
-  assert.equal(items.length, 2);
+  assert.equal(items.length, 3);
   assert.equal(items[0].ctime, 123);
   assert.equal(items[1].ctime, null);
+  // 文件时间读不到时退回文件夹时间；文件时间可用时取最新的文件时间
+  assert.equal(items[0].mtime, 999);
+  assert.equal(items[1].mtime, null);
+  assert.equal(items[2].mtime, 5000);
 });
 
 test("新插件出现时跳过扫描间隔，扫描进行中则补扫一次", async () => {

@@ -81,6 +81,47 @@
   width: min(520px, 90vw);
 }
 
+/* ── 更新说明弹窗 ── */
+.pzn-release-modal { width: min(760px, 92vw); }
+
+.pzn-release-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.pzn-release-version {
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+  color: var(--interactive-accent);
+  font-weight: var(--font-medium, 500);
+  font-variant-numeric: tabular-nums;
+}
+
+.pzn-release-repo { font-family: var(--font-monospace); }
+.pzn-release-date { margin-inline-start: auto; }
+
+.pzn-release-status { color: var(--text-muted); font-size: var(--font-ui-smaller); line-height: 1.6; }
+
+/* 说明可能很长：内部滚动，弹窗本体不跟着拉高 */
+.pzn-release-body {
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  padding-inline-end: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 10px;
+}
+
+.pzn-release-body img { max-width: 100%; height: auto; }
+.pzn-release-body pre { overflow: auto; }
+.pzn-release-body > :first-child { margin-top: 0; }
+.pzn-release-body h2 { font-size: var(--font-ui-large); }
+
 .pzn-field {
   display: flex;
   flex-direction: column;
@@ -283,35 +324,54 @@
 .pzn-side-numbered {
   position: relative;
   display: block;
-  padding-inline-start: 32px;
+  /* 预留位要覆盖徽标真实宽度（含边框与内边距），否则会压到插件名上 */
+  padding-inline-start: 34px;
+  /* 没有中文别名时标题只有一行，18px 的徽标会把这一行撑破、压到相邻项上；
+     给个最小高度，让徽标始终有落脚空间 */
+  min-height: 24px;
 }
 
 .pzn-side-number {
   position: absolute;
   inset-inline-start: 0;
-  top: 1px;
-  min-width: 25px;
-  height: 20px;
-  padding: 0 3px;
+  /* 垂直居中：单行时居那一行，有中文别名（两行）时居中于整体，不再吊在第一行顶上 */
+  top: 50%;
+  transform: translateY(-50%);
+  box-sizing: border-box;
+  min-width: 26px;
+  max-width: 34px;
+  height: 18px;
+  padding: 0 4px;
   border: 1px solid color-mix(in srgb, var(--text-accent) 35%, transparent);
   border-radius: 5px;
   background: color-mix(in srgb, var(--text-accent) 10%, transparent);
   color: var(--text-accent);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  line-height: 18px;
+  line-height: 16px;
   text-align: center;
+  overflow: hidden;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
 
-.pzn-side-sort {
+/* 侧栏搜索框（替代原来的「默认顺序」下拉） */
+.pzn-side-search {
   margin: 0 8px 8px;
-  justify-content: space-between;
 }
 
+.pzn-side-search input {
+  width: 100%;
+  height: 30px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: var(--font-ui-smaller);
+}
+
+.pzn-side-hidden { display: none !important; }
+
 .pzn-sort-label,
-.pzn-list-controls,
+.pzn-filter-label,
 .pzn-group-toggle {
   display: flex;
   align-items: center;
@@ -320,18 +380,78 @@
   font-size: var(--font-ui-smaller);
 }
 
-.pzn-sort-label select {
-  max-width: 220px;
-  min-width: 0;
+.pzn-list-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text-muted);
   font-size: var(--font-ui-smaller);
 }
 
-.pzn-side-sort select { max-width: 150px; }
+/* 排序放最左，状态/分组/管理分组靠右 */
+.pzn-list-controls > .pzn-sort-label { margin-inline-end: auto; }
+
+/* 每个筛选做成一枚胶囊：左边灰色字段名 + 右边无边框下拉 */
+.pzn-list-controls > .pzn-sort-label,
+.pzn-list-controls > .pzn-filter-label {
+  height: 30px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: var(--background-primary);
+  transition: border-color .12s ease, background-color .12s ease;
+}
+
+.pzn-list-controls > .pzn-sort-label:hover,
+.pzn-list-controls > .pzn-filter-label:hover {
+  border-color: var(--background-modifier-border-hover, var(--text-faint));
+}
+
+.pzn-list-controls select.dropdown {
+  height: 26px;
+  min-width: 0;
+  max-width: 170px;
+  padding: 0 22px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-medium, 500);
+}
+
+.pzn-list-controls select.dropdown:hover { background-color: var(--background-modifier-hover); }
+.pzn-list-controls select.dropdown:focus { box-shadow: none; }
+
+/* 管理分组：描边主按钮，与三个筛选胶囊同高同圆角 */
+.pzn-list-controls > .pzn-manage-groups {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--interactive-accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--interactive-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-medium, 500);
+  box-shadow: none;
+}
+
+.pzn-list-controls > .pzn-manage-groups:hover {
+  background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+  color: var(--interactive-accent);
+}
+
+.pzn-group-toggle { cursor: pointer; white-space: nowrap; }
+.pzn-group-toggle input { margin: 0; }
+.pzn-list-controls button { font-size: var(--font-ui-smaller); }
 
 .pzn-list-toolbar {
   order: -1;
   padding: 12px 16px 14px;
 }
+.pzn-list-status { margin-top: 10px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 
 .pzn-list-search,
 .pzn-list-search input {
@@ -344,13 +464,6 @@
   padding: 7px 14px;
   margin-bottom: 12px;
 }
-
-.pzn-list-controls { flex-wrap: wrap; }
-.pzn-list-controls > .pzn-sort-label { margin-inline-end: auto; }
-.pzn-group-toggle { cursor: pointer; white-space: nowrap; }
-.pzn-group-toggle input { margin: 0; }
-.pzn-list-controls button { font-size: var(--font-ui-smaller); }
-.pzn-list-status { margin-top: 10px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 
 .pzn-native-search,
 .pzn-plugin-list > .pzn-row-hidden,
@@ -411,15 +524,73 @@
 
 .pzn-group-arrow { width: 12px; color: var(--text-muted); }
 .pzn-group-count { color: var(--text-muted); font-size: var(--font-ui-smaller); font-weight: normal; }
-.pzn-row-group select { max-width: 115px; font-size: var(--font-ui-smaller); color: var(--text-muted); }
+/* 卡片内的分组下拉：与工具栏三个筛选共用一套胶囊视觉语言
+   （label 当胶囊容器，select 去边框透明底，悬停才显底色）
+   max-width 取 145：实测下拉固有宽度 141（最长分组名「待评估插件（可删除）」），
+   卡在 128 会把长分组名截断，放宽后各卡片胶囊宽度一致且不丢字 */
+.pzn-row-group {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 26px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: var(--background-primary);
+  transition: border-color .12s ease, background-color .12s ease;
+}
+
+.pzn-row-group:hover {
+  border-color: var(--background-modifier-border-hover, var(--text-faint));
+}
+
+.pzn-row-group select.dropdown {
+  height: 24px;
+  min-width: 0;
+  max-width: 145px;
+  padding: 0 22px 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-medium, 500);
+}
+
+.pzn-row-group select.dropdown:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.pzn-row-group select.dropdown:focus { box-shadow: none; }
+
+/* 「更新说明」按钮：贴在原生「更新」按钮左侧。
+   直接对齐原生按钮的尺寸与圆角（32px / radius-s / interactive-normal），
+   两颗按钮并排时像一个按钮组；做成胶囊反而会和右边的方形「更新」打架。
+   选择器要压过主题的 `.setting-item-control button`，否则背景色被主题改回去 */
+.pzn-plugin-list > .setting-item.pzn-numbered-row .pzn-release-button {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--interactive-normal);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+}
+
+.pzn-plugin-list > .setting-item.pzn-numbered-row .pzn-release-button:hover {
+  background: var(--interactive-hover);
+  color: var(--text-normal);
+}
 .pzn-group-editor { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .pzn-group-name { flex: 1; min-width: 0; }
 .pzn-group-name input { width: 100%; }
 .pzn-group-editor button { flex-shrink: 0; font-size: var(--font-ui-smaller); }
 
 @media (max-width: 650px) {
-  .pzn-row-group select { max-width: 85px; }
-  .pzn-side-sort { flex-wrap: wrap; }
+  .pzn-row-group select.dropdown { max-width: 96px; }
   .pzn-sort-label select { max-width: 170px; }
 }
 
@@ -459,3 +630,239 @@
 .pzn-ui-popover .pzn-muted { font-size: var(--font-ui-smaller); }
 
 .pzn-free-choice { flex-wrap: wrap; }
+
+/* ── 卡片网格（Better Manager 风格）：一行两个插件，含状态徽标与时间 ────────── */
+
+.pzn-plugin-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  /* 同一行的两张卡片互相拉平成等高（grid 行高 = 该行最高者），
+     底边一律对齐；窗口宽度变化时列宽、行高都由内容自动重算，不用写死高度。
+     （早先写 start 是为了让短卡片不被撑高，结果就是左右底边参差） */
+  align-items: stretch;
+  width: 100%;
+  margin-inline: 0;
+  /* 卡片不能贴着灰色面板的左右边缘：留出与工具栏一致的 16px 内距，
+     面板圆角处才不会出现"卡片顶到圆角"的挤压感 */
+  padding: 0 16px 10px;
+}
+
+/* Obsidian 1.15 的 .setting-group 带 max-width:700px + margin:auto，会把整块列表居中限宽；
+   这里只针对承载插件列表的那个 group 解除限制，让卡片从内容区左侧铺开 */
+.setting-group:has(> .pzn-plugin-list),
+.setting-group:has(.pzn-plugin-list) {
+  max-width: none;
+  margin-inline: 0;
+}
+
+/* 工具栏、分组标题、状态行横跨整行 */
+/* 左右内距已由 .pzn-plugin-list 统一给出，工具栏不再重复加，否则会比卡片多缩进 16px */
+.pzn-plugin-list > .pzn-list-toolbar { padding-inline: 0; }
+
+.pzn-plugin-list > .pzn-list-toolbar,
+.pzn-plugin-list > .pzn-group-heading,
+.pzn-plugin-list > .pzn-list-status {
+  grid-column: 1 / -1;
+}
+
+.pzn-plugin-list > .pzn-group-heading {
+  margin-top: 4px;
+  border-top: 0;
+  border-radius: var(--radius-m, 8px);
+  background: var(--background-secondary-alt, var(--background-secondary));
+}
+
+/* 单张卡片 */
+/* 选择器叠到 0,3,0：Minimal 等主题用 `.setting-items .setting-item`
+   （同样是 0,2,0）在插件样式之后加载，会把 align-items 改成 center、
+   background 改透明、border 置 none，卡片就散架了 */
+.pzn-plugin-list > .setting-item.pzn-numbered-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+  /* 显式 stretch + height:auto：宿主若有 height/flex 相关声明也不会把卡片缩回内容高，
+     保证同一行两张卡片底边严格对齐 */
+  align-self: stretch;
+  height: auto;
+  margin: 0;
+  padding: 14px 16px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-top: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-l, 12px);
+  /* 卡片底色要比页面亮一档：--background-secondary 在本主题下与页面同色，
+     卡片会完全看不见边界，所以用 secondary-alt */
+  background: var(--background-secondary-alt, var(--background-secondary));
+  box-shadow: none;
+}
+
+.pzn-plugin-list > .setting-item.pzn-numbered-row > .setting-item-info {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  /* 宿主的 .setting-item 是 align-items:center，列向布局下会把 fit-content 的信息块
+     水平居中，导致说明短的卡片（BRAT / Better Manager）看起来缩进。
+     这里用 align-self 覆盖，强制信息块撑满卡片宽度、文字一律贴左。 */
+  align-self: stretch;
+  width: 100%;
+  text-align: start;
+}
+
+.pzn-plugin-list > .setting-item.pzn-numbered-row > .setting-item-control {
+  width: 100%;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  /* 卡片窄时整行换行，而不是把「安装时间/更新时间」压成两行小字 */
+  flex-wrap: wrap;
+  row-gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+/* 卡片本身作为尺寸容器：卡片一窄，就让日期独占一行，
+   右侧「分组胶囊 + 齿轮 + ⋯ + 开关」整体落到第二行——
+   否则会被日期挤成「日期 / 胶囊+齿轮 / ⋯+开关」三行，按钮散架。
+   选择器要压过下面基础规则 `.pzn-card-dates`（那个规则在源码里更靠后），
+   否则同为 (0,1,0) 会被后写的 `flex: 0 0 auto` 盖掉 */
+.pzn-plugin-list > .setting-item.pzn-numbered-row { container-type: inline-size; }
+
+@container (max-width: 520px) {
+  .pzn-plugin-list > .setting-item.pzn-numbered-row .pzn-card-dates {
+    flex: 1 0 100%;
+    margin-inline-end: 0;
+  }
+}
+
+/* 标题行：名称 + 别名 + 版本 + 状态徽标 */
+.pzn-plugin-list .setting-item-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  min-width: 0;
+  font-weight: var(--font-medium, 500);
+}
+
+/* 中文别名单独一行，不与名称/版本抢宽度（order 让它排在徽标之后换行） */
+.pzn-plugin-list .pzn-alias {
+  order: 9;
+  flex: 1 0 100%;
+  color: var(--text-accent);
+  /* 中文名是主名称，字号跟英文名一致，不再缩成小字 */
+  font-size: inherit;
+  font-weight: var(--font-normal);
+  line-height: 1.45;
+}
+
+.pzn-card-version {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+}
+
+.pzn-card-badge {
+  margin-inline-start: auto;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.pzn-card-badge.is-enabled {
+  background: color-mix(in srgb, var(--color-green) 18%, transparent);
+  color: var(--color-green);
+}
+
+.pzn-card-dates {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px 14px;
+  /* 已挪进控制区最前面：auto 右外边距把它顶到卡片左下角，右侧按钮组仍贴右。
+     flex: 0 0 auto 保证它不参与压缩——空间不够时由父级换行，而不是把两段日期拆成两行 */
+  flex: 0 0 auto;
+  margin-inline-end: auto;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pzn-card-settings {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+/* 卡片模式下隐藏序号，避免与徽标抢位置 */
+.pzn-plugin-list > .setting-item.pzn-numbered-row > .pzn-row-number { display: none; }
+
+/* 统计徽标 */
+.pzn-list-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pzn-stat {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+}
+
+.pzn-stat-total { background: color-mix(in srgb, var(--text-accent) 15%, transparent); color: var(--text-accent); }
+.pzn-stat-enabled { background: color-mix(in srgb, var(--color-green) 15%, transparent); color: var(--color-green); }
+
+@media (max-width: 900px) {
+  .pzn-plugin-list { grid-template-columns: 1fr; }
+  .pzn-list-controls select.dropdown { max-width: 120px; }
+}
+
+/* 待更新徽标（版本号后）+ 统计行待更新计数 */
+.pzn-card-update {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-orange) 16%, transparent);
+  color: var(--color-orange);
+  font-size: var(--font-ui-smaller);
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 能定位到 GitHub 仓库时，徽标升级为「查看更新说明」的可点入口 */
+.pzn-card-update.is-clickable { cursor: pointer; transition: background-color .12s ease; }
+.pzn-card-update.is-clickable:hover { background: color-mix(in srgb, var(--color-orange) 30%, transparent); }
+.pzn-card-update.is-clickable:focus-visible {
+  outline: 2px solid var(--color-orange);
+  outline-offset: 1px;
+}
+
+.pzn-stat-update {
+  background: color-mix(in srgb, var(--color-orange) 15%, transparent);
+  color: var(--color-orange);
+}
+
+/* 分组顺序调整按钮（管理分组弹窗内） */
+.pzn-icon-button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  line-height: 1;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.pzn-icon-button:hover:not(:disabled) { color: var(--text-normal); }

@@ -33,7 +33,7 @@
  */
 "use strict";
 
-const { Plugin, Modal, Notice, setIcon, PluginSettingTab, Setting, requestUrl } = require("obsidian");
+const { Plugin, Modal, Notice, Component, setIcon, PluginSettingTab, Setting, requestUrl, MarkdownRenderer } = require("obsidian");
 
 // Offline Chinese reference data: 10,314 entries (2026-11-13 snapshot). See THIRD_PARTY_NOTICES.md.
 // Offline references; personal notes and generated caches retain priority.
@@ -596,7 +596,7 @@ function validText(value, field) {
 }
 
 const SORT_MODES = [["default", "默认顺序"], ["az", "原名 A → Z"], ["za", "原名 Z → A"],
-  ["new", "文件夹创建时间：最新优先"], ["old", "文件夹创建时间：最早优先"]];
+  ["new", "插件更新时间：最新优先"], ["old", "插件更新时间：最早优先"]];
 const SIDE_SELECTOR = '.mod-settings [data-section="community-plugins"]';
 
 function managementData(raw) {
@@ -612,9 +612,17 @@ function managementData(raw) {
   if (record(value.assignments)) for (const [id, group] of Object.entries(value.assignments)) {
     if (/^[a-zA-Z0-9_-]+$/.test(id) && groups.some((g) => g.id === group)) assignments[id] = group;
   }
+  const statusFilter = ["all", "enabled", "disabled", "update"].includes(value.statusFilter)
+    ? value.statusFilter
+    : (value.hideDisabled === true ? "enabled" : "all");
+  const groupFilter = value.groupFilter === "all" || value.groupFilter === "" ||
+    groups.some((g) => g.id === value.groupFilter) ? value.groupFilter : "all";
   return { sidebarSort: SORT_MODES.some(([id]) => id === value.sidebarSort) ? value.sidebarSort : "default",
     listSort: SORT_MODES.some(([id]) => id === value.listSort) ? value.listSort : "default",
-    grouped: value.grouped === true, hideDisabled: value.hideDisabled === true, groups, assignments,
+    grouped: value.grouped === true,
+    // 兼容旧字段：hideDisabled 与「状态 = 已启用」等价，历史数据读写不受影响
+    hideDisabled: statusFilter === "enabled",
+    statusFilter, groupFilter, groups, assignments,
     collapsed: [...new Set((Array.isArray(value.collapsed) ? value.collapsed : []).filter((id) =>
       id === "" || groups.some((g) => g.id === id)))] };
 }
@@ -626,9 +634,10 @@ function sortPlugins(items, mode) {
       return (mode === "za" ? -result : result) || a.index - b.index;
     }
     if (mode === "new" || mode === "old") {
-      const at = Number.isFinite(a.ctime) && a.ctime > 0, bt = Number.isFinite(b.ctime) && b.ctime > 0;
+      // 用「插件文件更新时间」排序：能直接看出哪些插件很久没更新；时间未知的置后
+      const at = Number.isFinite(a.mtime) && a.mtime > 0, bt = Number.isFinite(b.mtime) && b.mtime > 0;
       if (at !== bt) return at ? -1 : 1;
-      if (at && a.ctime !== b.ctime) return mode === "new" ? b.ctime - a.ctime : a.ctime - b.ctime;
+      if (at && a.mtime !== b.mtime) return mode === "new" ? b.mtime - a.mtime : a.mtime - b.mtime;
     }
     return a.index - b.index;
   });
@@ -647,6 +656,273 @@ function sortSelect(doc, label) {
     option.value = value;
     select.append(option);
   }
+  wrapper.append(select);
+  return { wrapper, select };
+}
+
+const STATUS_OPTIONS = [["all", "全部"], ["enabled", "已启用"], ["disabled", "已禁用"], ["update", "待更新"]];
+
+/**
+ * 待更新插件：Obsidian 检查更新后把结果写到 app.plugins.updates（id → { repo, version, manifest }）。
+ * 这里只做纯读取，不主动触发网络检查，避免打断用户操作。
+ * 返回 { id: 最新版本号 }。
+ */
+function pendingUpdates(app) {
+  const map = Object.create(null);
+  const raw = app?.plugins?.updates;
+  if (!record(raw)) return map;
+  for (const [id, info] of Object.entries(raw)) {
+    const version = typeof info?.version === "string" ? info.version : "";
+    if (version) map[id] = version;
+  }
+  return map;
+}
+
+// 注意：不能用 \b，中文属非单词字符，"更新" 结尾处没有单词边界
+const UPDATE_BUTTON_TEXT = /^(更新|升级|update)/i;
+
+/** 原生「更新」按钮：Obsidian 只对 app.plugins.updates 里的插件渲染这个按钮 */
+function rowUpdateButton(row) {
+  const control = row.querySelector(".setting-item-control");
+  if (!control) return null;
+  for (const button of control.querySelectorAll("button")) {
+    if (button.matches(".pzn-card-settings, .pzn-edit, .pzn-manager")) continue;
+    if (UPDATE_BUTTON_TEXT.test((button.textContent || "").trim())) return button;
+  }
+  return null;
+}
+
+/**
+ * 解析单个插件的可更新版本。
+ * 优先 app.plugins.updates；该对象缺失（尚未检查 / 已被重置）时退回检测原生更新按钮，
+ * 版本号从按钮 tooltip 里取，取不到返回 "?"（表示「有更新但版本未知」）。
+ * 返回 "" 表示无更新。
+ */
+function updateVersionOf(row, updates) {
+  const id = row.dataset.pluginId;
+  if (!id) return "";
+  if (Object.hasOwn(updates, id)) return updates[id];
+  const button = rowUpdateButton(row);
+  if (!button) return "";
+  const label = `${button.getAttribute("aria-label") || ""} ${button.getAttribute("data-tooltip") || ""}`;
+  const match = label.match(/\d+\.\d+\.\d+[^\s,;)]*/);
+  return match ? match[0] : "?";
+}
+
+/* ── 更新说明（Release Notes）────────────────────────────────────────────
+   数据源两路：
+   1) api.github.com/repos/{repo}/releases/tags/{tag} —— 返回 JSON，body 是纯 Markdown，
+      交给 MarkdownRenderer 渲染，排版与主题一致；未认证配额 60 次/小时，且可能被别人共用 IP 打满。
+   2) github.com/{repo}/releases.atom —— 最近 10 个版本的完整 HTML 正文，无配额；
+      作为 1) 的兜底，注入前必须过白名单净化（第三方 release 内容是外部输入）。
+   两者都失败就只给「在浏览器打开」。结果按 repo@tag 永久缓存（同一 tag 的说明不会变）。
+   GitHub 的 release 页面带 X-Frame-Options: deny，无法 iframe 嵌入，所以只能取数据本地渲染。 */
+const RELEASE_API = "https://api.github.com/repos";
+const RELEASE_CACHE_MAX = 80;
+const RELEASE_ALLOWED_TAGS = new Set([
+  "P", "BR", "HR", "H1", "H2", "H3", "H4", "H5", "H6", "UL", "OL", "LI",
+  "STRONG", "B", "EM", "I", "U", "S", "DEL", "CODE", "PRE", "BLOCKQUOTE", "SPAN", "DIV",
+  "A", "IMG", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "DETAILS", "SUMMARY",
+]);
+
+/** 待更新插件的仓库与目标版本：app.plugins.updates 里就带 repo，无需另拉插件市场清单 */
+function updateTargetOf(app, id) {
+  const info = app?.plugins?.updates?.[id];
+  if (!info || typeof info !== "object") return null;
+  const repo = typeof info.repo === "string" ? info.repo.trim() : "";
+  const version = typeof info.version === "string" ? info.version.trim() : "";
+  if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) return null;
+  return { repo, version };
+}
+
+/** tag 约定五花八门（2.12.0 / v2.12.0），两种都试 */
+function releaseTagCandidates(version) {
+  const v = String(version || "").trim();
+  if (!v) return [];
+  const bare = v.replace(/^v/i, "");
+  return bare === v ? [v, `v${bare}`] : [v, bare];
+}
+
+function sameTag(a, b) {
+  const norm = (value) => String(value || "").trim().toLowerCase().replace(/^v/i, "");
+  const left = norm(a);
+  return Boolean(left) && left === norm(b);
+}
+
+/**
+ * 把 release 正文（HTML）按白名单重建成 DOM：不认识标签保留文字、丢掉标签；
+ * 属性只留 href/src/alt/title/colspan/rowspan，href 与 src 必须是 http(s)/mailto，
+ * 顺带清掉所有 on* 事件（因为压根不复制其它属性）。return 的是新建的安全节点。
+ */
+function sanitizeReleaseHtml(doc, html) {
+  const parsed = new DOMParser().parseFromString(String(html || ""), "text/html");
+  const output = doc.createElement("div");
+  const copy = (source, target) => {
+    for (const node of source.childNodes) {
+      if (node.nodeType === 3) { target.append(doc.createTextNode(node.nodeValue)); continue; }
+      if (node.nodeType !== 1) continue;
+      const tag = node.tagName.toUpperCase();
+      if (!RELEASE_ALLOWED_TAGS.has(tag)) { copy(node, target); continue; }
+      const built = doc.createElement(node.tagName.toLowerCase());
+      for (const attr of node.attributes) {
+        const name = attr.name.toLowerCase();
+        const value = attr.value;
+        if (name === "href" && /^(https?:\/\/|mailto:|#)/i.test(value)) built.setAttribute("href", value);
+        else if (name === "src" && /^https?:\/\//i.test(value)) built.setAttribute("src", value);
+        else if (name === "alt" || name === "title" || name === "colspan" || name === "rowspan") built.setAttribute(name, value);
+      }
+      if (tag === "A") { built.setAttribute("target", "_blank"); built.setAttribute("rel", "noopener noreferrer"); }
+      if (tag === "IMG") built.setAttribute("loading", "lazy");
+      copy(node, built);
+      target.append(built);
+    }
+  };
+  copy(parsed.body, output);
+  return output;
+}
+
+/** release 说明的抓取 + 磁盘缓存（放插件目录下的独立文件，不塞进 data.json） */
+class ReleaseNotesStore {
+  constructor(plugin) {
+    this.plugin = plugin;
+    this.entries = Object.create(null);
+    this.loaded = false;
+    this.pending = null;
+  }
+
+  get filePath() {
+    const dir = this.plugin.manifest?.dir || `.obsidian/plugins/${this.plugin.manifest?.id || "plugin-zh-notes"}`;
+    return `${dir}/release-notes.json`;
+  }
+
+  async load() {
+    if (this.loaded) return;
+    if (this.pending) { await this.pending; return; }
+    this.pending = (async () => {
+      try {
+        const raw = await this.plugin.app.vault.adapter.read(this.filePath);
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          for (const [key, value] of Object.entries(parsed)) {
+            if (value && typeof value === "object") this.entries[key] = value;
+          }
+        }
+      } catch (error) { /* 首次运行或文件损坏：当作空缓存 */ }
+      this.loaded = true;
+    })();
+    try { await this.pending; } finally { this.pending = null; }
+  }
+
+  async persist() {
+    // 只留最近 RELEASE_CACHE_MAX 条，防止缓存文件无限长
+    const keys = Object.keys(this.entries).sort((a, b) => (this.entries[b].savedAt || 0) - (this.entries[a].savedAt || 0));
+    for (const key of keys.slice(RELEASE_CACHE_MAX)) delete this.entries[key];
+    try {
+      await this.plugin.app.vault.adapter.write(this.filePath, JSON.stringify(this.entries));
+    } catch (error) { /* 写不进去不影响本次显示 */ }
+  }
+
+  /**
+   * 取某个插件某个版本的说明：缓存 → API → Atom。
+   * 返回 { kind: "markdown"|"html", body|html, tag, publishedAt, url, from } 或 null。
+   */
+  async resolve(repo, version) {
+    await this.load();
+    const key = `${repo.toLowerCase()}@${version || "latest"}`.toLowerCase();
+    const cached = this.entries[key];
+    if (cached && cached.tag) return { ...cached, from: "cache" };
+    const notes = (await this.fromApi(repo, version)) || (await this.fromAtom(repo, version));
+    if (!notes) return null;
+    this.entries[key] = { ...notes, repo, savedAt: Date.now() };
+    await this.persist();
+    return { ...this.entries[key], from: "network" };
+  }
+
+  async fromApi(repo, version) {
+    const urls = releaseTagCandidates(version).map((tag) => `${RELEASE_API}/${repo}/releases/tags/${encodeURIComponent(tag)}`);
+    // 版本未知（"?"）或 tag 对不上时，退回 latest
+    urls.push(`${RELEASE_API}/${repo}/releases/latest`);
+    for (const url of urls) {
+      let response;
+      try {
+        response = await requestUrl({ url, headers: { Accept: "application/vnd.github+json" }, throw: false });
+      } catch (error) { return null; }
+      if (response.status === 200) {
+        let payload = null;
+        try { payload = response.json; } catch (error) { payload = null; }
+        const body = typeof payload?.body === "string" ? payload.body.trim() : "";
+        if (!body) return null; // 该版本没写正文 → 交给 atom 试
+        return {
+          kind: "markdown",
+          body,
+          tag: payload.tag_name || version || "",
+          name: payload.name || "",
+          publishedAt: payload.published_at || "",
+          url: payload.html_url || "",
+        };
+      }
+      // 404 说明 tag 猜错了，继续试下一个；403/429 是配额问题，直接换数据源
+      if (response.status !== 404) return null;
+    }
+    return null;
+  }
+
+  async fromAtom(repo, version) {
+    let response;
+    try {
+      response = await requestUrl({ url: `https://github.com/${repo}/releases.atom`, throw: false });
+    } catch (error) { return null; }
+    if (response.status !== 200 || !response.text) return null;
+    let xml;
+    try { xml = new DOMParser().parseFromString(response.text, "application/xml"); } catch (error) { return null; }
+    const entries = [...xml.getElementsByTagName("entry")];
+    if (!entries.length) return null;
+    const read = (entry, tag) => {
+      const node = entry.getElementsByTagName(tag)[0];
+      return node ? node.textContent || "" : "";
+    };
+    const entry = entries.find((item) => sameTag(read(item, "title"), version)) || entries[0];
+    const html = read(entry, "content");
+    if (!html.trim()) return null;
+    const link = entry.getElementsByTagName("link")[0];
+    return {
+      kind: "html",
+      html,
+      tag: read(entry, "title") || version || "",
+      publishedAt: read(entry, "updated") || "",
+      url: link ? link.getAttribute("href") || "" : "",
+    };
+  }
+}
+
+function formatReleaseDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return formatDate(date.getTime());
+}
+
+/** 重填 select 选项（同值跳过，避免每次刷新都重建 DOM 打断焦点） */
+function setSelectOptions(select, options) {
+  const signature = JSON.stringify(options);
+  if (select.dataset.options === signature) return;
+  const doc = select.ownerDocument;
+  select.replaceChildren();
+  for (const [value, text] of options) {
+    const option = element(doc, "option", "", text);
+    option.value = value;
+    select.append(option);
+  }
+  select.dataset.options = signature;
+}
+
+/** 通用「标签 + 下拉框」控件，供状态 / 分组等过滤条件复用 */
+function optionsSelect(doc, label, options) {
+  // 不要复用 pzn-sort-label：那条规则带 margin-inline-end:auto（把排序顶到最左），
+  // 套到状态/分组上会把三个筛选均匀撑开，看着像散落一地的胶囊。
+  const wrapper = element(doc, "label", "pzn-filter-label", label);
+  const select = element(doc, "select", "dropdown");
+  setSelectOptions(select, options);
   wrapper.append(select);
   return { wrapper, select };
 }
@@ -828,6 +1104,14 @@ function displayDescription(description) {
     .replace(/(?:除此之外|除插件简介外|除插件自述外)[，,]\s*(?:资料未提供更多细节|没有更多功能细节可供说明|没有更多功能细节|未提供更多细节)[。.!！]?(?=\s*$)/u, "")
     .replace(/(?:该插件尚未经 Obsidian 团队人工审核|以上依据插件简介，README 摘要为空，具体用法与范围未在资料中说明|资料中没有更详细的说明，具体用法尚不明确|由于缺少 README 说明，更详细的功能与兼容性信息无法确认|该插件说明只提到同步用途，未提供更多功能细节或版本兼容性信息)[。.!！]?(?=\s*$)/u, "")
     .trim();
+}
+
+/** 时间戳 → YYYY/MM/DD；未知时间返回占位符 */
+function formatDate(timestamp) {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return "—";
+  const date = new Date(timestamp);
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
 }
 
 function element(doc, tag, className, text) {
@@ -1281,12 +1565,22 @@ class GroupManager extends Modal {
         catch (e) { error.textContent = e.message; button.disabled = false; }
       });
     };
-    for (const g of this.owner.data.management.groups) {
+    const groups = this.owner.data.management.groups;
+    for (const [index, g] of groups.entries()) {
       const row = element(doc, "div", "pzn-group-editor");
       const label = element(doc, "label", "pzn-group-name");
       label.append(element(doc, "span", "pzn-sr-only", `分组名称：${g.name}`));
       const input = element(doc, "input"); input.value = g.name; input.maxLength = 30;
       label.append(input);
+      // 顺序调整：只换显示顺序（影响分组下拉与分组列表的排列），不改任何插件归属
+      const up = element(doc, "button", "pzn-icon-button", "↑");
+      up.type = "button"; up.setAttribute("aria-label", `上移分组：${g.name}`);
+      up.title = "上移"; up.disabled = index === 0;
+      act(up, () => this.owner.moveGroup(g.id, -1));
+      const down = element(doc, "button", "pzn-icon-button", "↓");
+      down.type = "button"; down.setAttribute("aria-label", `下移分组：${g.name}`);
+      down.title = "下移"; down.disabled = index === groups.length - 1;
+      act(down, () => this.owner.moveGroup(g.id, 1));
       const rename = element(doc, "button", "", "保存名称");
       const remove = element(doc, "button", "", "删除");
       act(rename, () => this.owner.changeGroup(g.id, input.value));
@@ -1297,7 +1591,7 @@ class GroupManager extends Modal {
         try { await this.owner.changeGroup(g.id, null); this.render(); }
         catch (e) { error.textContent = e.message; remove.disabled = false; }
       });
-      row.append(label, rename, remove); this.contentEl.append(row);
+      row.append(label, up, down, rename, remove); this.contentEl.append(row);
     }
     const form = element(doc, "form", "pzn-group-editor");
     const label = element(doc, "label", "pzn-group-name");
@@ -1319,6 +1613,104 @@ class GroupManager extends Modal {
   onClose() { this.owner.editors.delete(this); this.contentEl.replaceChildren(); }
 }
 
+/** 更新说明弹窗：拉取 → 渲染（Markdown 走 MarkdownRenderer，HTML 走白名单重建） */
+class ReleaseNotesModal extends Modal {
+  constructor(plugin, options) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.options = options;
+    this.closed = false;
+    this.url = "";
+  }
+
+  onOpen() {
+    const { name, repo, version } = this.options;
+    this.closed = false;
+    this.setTitle(name || repo);
+    this.modalEl.classList.add("pzn-modal", "pzn-release-modal");
+    const doc = this.contentEl.ownerDocument;
+    this.contentEl.replaceChildren();
+
+    const meta = element(doc, "div", "pzn-release-meta");
+    const versionTag = element(doc, "span", "pzn-release-version", version ? `v${version}` : "最新版本");
+    const repoTag = element(doc, "span", "pzn-release-repo", repo);
+    const dateTag = element(doc, "span", "pzn-release-date");
+    meta.append(versionTag, repoTag, dateTag);
+
+    const status = element(doc, "p", "pzn-release-status", "正在获取更新说明…");
+    const body = element(doc, "div", "pzn-release-body markdown-rendered");
+    const error = element(doc, "p", "pzn-error");
+
+    const browser = element(doc, "button", "", "在浏览器打开");
+    browser.type = "button";
+    browser.addEventListener("click", () => this.openInBrowser());
+    const close = element(doc, "button", "", "关闭");
+    close.type = "button";
+    close.addEventListener("click", () => this.close());
+    const actions = element(doc, "div", "pzn-actions");
+    actions.append(browser, close);
+
+    this.contentEl.append(meta, status, body, error, actions);
+    this.fields = { status, body, error, dateTag, browser, versionTag };
+    this.load();
+  }
+
+  openInBrowser() {
+    const url = this.url || (this.options.repo ? `https://github.com/${this.options.repo}/releases` : "");
+    if (!url) return;
+    window.open(url, "_blank");
+  }
+
+  async load() {
+    const { repo, version } = this.options;
+    const { status, body, error, dateTag } = this.fields;
+    let notes = null;
+    try {
+      notes = await this.plugin.releaseNotes.resolve(repo, version);
+    } catch (failure) {
+      error.textContent = `获取失败：${failure?.message || failure}`;
+    }
+    if (this.closed) return;
+    if (!notes) {
+      status.textContent = version
+        ? `没有取到 v${version} 的发布说明（可能该版本没写说明，或网络被拦）。可以点「在浏览器打开」直接看。`
+        : "没有取到发布说明。可以点「在浏览器打开」直接看。";
+      status.classList.add("is-empty");
+      return;
+    }
+    status.remove();
+    this.url = notes.url || `https://github.com/${repo}/releases`;
+    const when = formatReleaseDate(notes.publishedAt);
+    dateTag.textContent = when ? `发布于 ${when}` : "";
+    if (notes.tag) {
+      const label = /^v/i.test(notes.tag) ? notes.tag : `v${notes.tag}`;
+      this.fields.versionTag.textContent = version && sameTag(notes.tag, version) ? label : `${label}（最新）`;
+    }
+    try {
+      if (notes.kind === "markdown" && typeof MarkdownRenderer !== "undefined") {
+        // 第 5 个参数必须是 Component：MarkdownRenderer 会对它 addChild（代码块/嵌入用），
+        // 传 Modal 会抛 "a.addChild is not a function"。这里给弹窗单独的生命周期容器。
+        this.component = this.component || new Component();
+        this.component.load();
+        await MarkdownRenderer.render(this.app, notes.body, body, "", this.component);
+      } else if (notes.kind === "html") {
+        body.append(sanitizeReleaseHtml(body.ownerDocument, notes.html));
+      } else {
+        body.append(element(body.ownerDocument, "pre", "", notes.body || notes.html || ""));
+      }
+    } catch (failure) {
+      error.textContent = `渲染失败：${failure?.message || failure}`;
+    }
+  }
+
+  onClose() {
+    this.closed = true;
+    try { this.component?.unload(); } catch (error) { /* 已经卸载过就忽略 */ }
+    this.component = null;
+    this.contentEl.replaceChildren();
+  }
+}
+
 class PluginChineseNotes extends Plugin {
   async onload() {
     this.stopped = false;
@@ -1335,6 +1727,7 @@ class PluginChineseNotes extends Plugin {
     this.managementScanAt = 0;
     this.managementScanPending = false;
     this.managementRescanRequested = false;
+    this.releaseNotes = new ReleaseNotesStore(this);
     try {
       this.data = parseData(await this.loadData());
     } catch (error) {
@@ -1425,6 +1818,36 @@ class PluginChineseNotes extends Plugin {
     const settings = this.app.setting;
     if (typeof settings?.openTabById === "function") settings.openTabById("community-plugins");
     else new Notice("请打开设置 → 第三方插件，查看中文说明");
+  }
+
+  /** 从插件卡片直接跳到该插件自己的设置页（未注册设置页的插件静默忽略） */
+  openPluginSettings(id) {
+    const settings = this.app.setting;
+    if (typeof settings?.openTabById !== "function") {
+      new Notice("当前 Obsidian 版本不支持直接打开插件设置页");
+      return;
+    }
+    try {
+      settings.open?.();
+      settings.openTabById(id);
+    } catch {
+      new Notice(`无法打开 ${id} 的设置页`);
+    }
+  }
+
+  /** 打开某个插件的「查看更新说明」弹窗；失败时给出可执行的下一步而不是静默 */
+  openReleaseNotes(id) {
+    const target = updateTargetOf(this.app, id);
+    const name = this.app?.plugins?.manifests?.[id]?.name || id;
+    if (!target) {
+      new Notice("暂未拿到该插件的仓库信息，请先点「检查更新」，或到 GitHub 直接查看");
+      return;
+    }
+    if (!target.version) {
+      new Notice("暂不知道该更新到哪个版本，请先点「检查更新」");
+      return;
+    }
+    new ReleaseNotesModal(this, { id, name, repo: target.repo, version: target.version }).open();
   }
 
   async saveProfile(settings, newKey = "") {
@@ -1538,9 +1961,20 @@ class PluginChineseNotes extends Plugin {
       const m = await this.readManifest(path);
       if (m) {
         try {
-          const stat = await adapter.stat(folder);
-          m.ctime = stat?.type === "folder" && Number.isFinite(stat.ctime) && stat.ctime > 0 ? stat.ctime : null;
-        } catch { m.ctime = null; }
+          const statOf = async (target) => {
+            try { return (await adapter.stat(target)) || null; } catch { return null; }
+          };
+          const [dirStat, manifestStat, mainStat] = await Promise.all(
+            [statOf(folder), statOf(`${folder}/manifest.json`), statOf(`${folder}/main.js`)]);
+          const ok = dirStat?.type === "folder";
+          m.ctime = ok && Number.isFinite(dirStat.ctime) && dirStat.ctime > 0 ? dirStat.ctime : null;
+          // 「更新时间」取插件文件里最新的 mtime：升级/手动覆盖重写的是 manifest.json 与
+          // main.js，而覆盖写入时文件夹自身 mtime 不一定刷新，所以以文件时间为准、文件夹兜底。
+          const fileTimes = [manifestStat?.mtime, mainStat?.mtime]
+            .filter((time) => Number.isFinite(time) && time > 0);
+          const dirTime = ok && Number.isFinite(dirStat.mtime) && dirStat.mtime > 0 ? dirStat.mtime : 0;
+          m.mtime = fileTimes.length ? Math.max(...fileTimes) : (dirTime || null);
+        } catch { m.ctime = null; m.mtime = null; }
         found.set(m.id, m);
       }
     }
@@ -1994,7 +2428,16 @@ class PluginChineseNotes extends Plugin {
   }
 
   saveManagement(change) {
-    return this.commit((data) => ({ ...data, management: managementData(change(data.management)) }));
+    return this.commit((data) => {
+      const previous = data.management;
+      let next = change(previous);
+      // 兼容旧写法：只改 hideDisabled、没碰 statusFilter 时，同步到新的三态状态过滤
+      if (next !== previous && next.hideDisabled !== previous.hideDisabled &&
+          next.statusFilter === previous.statusFilter) {
+        next = { ...next, statusFilter: next.hideDisabled ? "enabled" : "all" };
+      }
+      return { ...data, management: managementData(next) };
+    });
   }
 
   changeGroup(id, name) {
@@ -2011,6 +2454,21 @@ class PluginChineseNotes extends Plugin {
         else m.groups = m.groups.map((g) => g.id === id ? { ...g, name } : g);
       }
       return m;
+    });
+  }
+
+  /** 调整分组顺序：delta = -1 上移，+1 下移；越界时原样返回，不报错 */
+  moveGroup(id, delta) {
+    return this.saveManagement((current) => {
+      const m = managementData(current);
+      const index = m.groups.findIndex((g) => g.id === id);
+      if (index < 0) throw new Error("分组已不存在，请重新打开管理窗口。");
+      const target = index + delta;
+      if (target < 0 || target >= m.groups.length) return m;
+      const groups = [...m.groups];
+      const [moved] = groups.splice(index, 1);
+      groups.splice(target, 0, moved);
+      return { ...m, groups };
     });
   }
 
@@ -2145,6 +2603,8 @@ class PluginChineseNotes extends Plugin {
     if (!state || this.stopped) return;
     state.observer.disconnect();
     try {
+      // 待更新数据每次刷新重读一次（用户点「检查更新」后 app.plugins.updates 会整体替换）
+      this.updateIndex = pendingUpdates(this.app);
       for (const [row, mount] of this.mounts) {
         if (row.ownerDocument !== doc) continue;
         if (!row.isConnected || !row.matches(ROW_SELECTOR) || row.dataset.pluginId !== mount.id ||
@@ -2203,19 +2663,25 @@ class PluginChineseNotes extends Plugin {
     for (const parent of sideParents) {
       let side = state.sides.get(parent);
       if (!side) {
-        const sort = sortSelect(doc, "");
-        sort.wrapper.prepend(element(doc, "span", "pzn-sr-only", "侧栏插件排序"));
-        sort.wrapper.classList.add("pzn-side-sort", "pzn-manager");
-        sort.select.onchange = () => this.managementAction(() => this.saveManagement((v) => ({ ...v, sidebarSort: sort.select.value })));
-        side = { sort, items: new Map() }; state.sides.set(parent, side);
+        // 侧栏顶部原先是「默认顺序」下拉，排序是低频操作、占位却很贵；
+        // 换成搜索框，直接在本就拥挤的导航里按名字/别名过滤更实用。
+        const filter = element(doc, "div", "pzn-side-search pzn-manager");
+        const input = element(doc, "input");
+        input.type = "search";
+        input.placeholder = "搜索插件…";
+        input.setAttribute("aria-label", "搜索侧栏插件");
+        const label = element(doc, "span", "pzn-sr-only", "搜索侧栏插件");
+        filter.append(label, input);
+        input.oninput = () => this.refreshDocument(doc);
+        side = { filter, input, items: new Map() };
+        state.sides.set(parent, side);
       }
-      if (!side.sort.wrapper.isConnected) parent.before(side.sort.wrapper);
+      if (!side.filter.isConnected) parent.before(side.filter);
       parent.classList.add("pzn-ordered");
-      side.sort.select.value = m.sidebarSort;
       const items = [...parent.children].filter((e) => e.hasAttribute("data-setting-id"));
       for (const [item, old] of side.items) if (!items.includes(item)) {
         old.alias.remove(); old.number.remove(); old.title.classList.remove("pzn-side-numbered");
-        old.translate?.remove(); item.style.order = old.order; side.items.delete(item);
+        item.style.order = old.order; side.items.delete(item);
       }
       const sortable = [];
       for (const [index, item] of items.entries()) {
@@ -2233,28 +2699,23 @@ class PluginChineseNotes extends Plugin {
         if (!title.contains(saved.number)) title.prepend(saved.number);
         if (!title.contains(saved.alias)) title.append(saved.alias);
         const id = item.dataset.settingId, note = getNote(this.data, id);
-        if (id !== this.manifest.id && !saved.translate) {
-          const translate = element(doc, "button", "pzn-ui-translate clickable-icon");
-          translate.type = "button";
-          setIcon(translate, "languages");
-          translate.append(element(doc, "span", "pzn-sr-only", "翻译插件设置"));
-          translate.setAttribute("aria-expanded", "false");
-          translate.onclick = event => { event.preventDefault(); event.stopPropagation(); this.openUiPopover(id, translate); };
-          translate.onkeydown = event => { if (["Enter", " "].includes(event.key)) event.stopPropagation(); };
-          saved.translate = translate;
-        }
-        if (saved.translate && !item.contains(saved.translate)) item.append(saved.translate);
         const meta = this.managementCatalog.get(id);
         const name = meta?.name || [...title.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim() || id;
         const alias = displayAlias(note.alias, name);
         if (saved.alias.textContent !== alias) saved.alias.textContent = alias;
         saved.alias.hidden = !alias;
-        sortable.push({ item, name, ctime: meta?.ctime, index });
+        saved.haystack = `${name} ${alias} ${id}`.toLowerCase();
+        sortable.push({ item, name, ctime: meta?.ctime, mtime: meta?.mtime, index });
       }
       sortPlugins(sortable, m.sidebarSort).forEach(({ item }, index) => {
         item.style.order = String(index);
         side.items.get(item).number.textContent = String(index + 1).padStart(2, "0");
       });
+      // 侧栏搜索：命中保留原序号，不重排，避免过滤时序号跳来跳去
+      const sideQuery = side.input.value.trim().toLowerCase();
+      for (const [item, saved] of side.items) {
+        item.classList.toggle("pzn-side-hidden", Boolean(sideQuery) && !saved.haystack.includes(sideQuery));
+      }
     }
     for (const parent of lists) {
       let list = state.lists.get(parent);
@@ -2270,83 +2731,127 @@ class PluginChineseNotes extends Plugin {
         searchLabel.append(search);
         const controls = element(doc, "div", "pzn-list-controls");
         const sort = sortSelect(doc, "排序");
-        const hideLabel = element(doc, "label", "pzn-group-toggle");
-        const hideDisabled = element(doc, "input"); hideDisabled.type = "checkbox";
-        hideLabel.append(hideDisabled, "隐藏未启用");
-        const label = element(doc, "label", "pzn-group-toggle");
-        const toggle = element(doc, "input"); toggle.type = "checkbox";
-        label.append(toggle, "分组显示");
-        const manage = element(doc, "button", "", "管理分组");
+        // 状态 / 分组统一用下拉框（替代原来的两个勾选框），选项值即过滤条件
+        const statusSelect = optionsSelect(doc, "状态", STATUS_OPTIONS);
+        const groupFilter = optionsSelect(doc, "分组", [["all", "全部分组"]]);
+        const manage = element(doc, "button", "pzn-manage-groups", "管理分组");
         manage.onclick = () => {
           if ([...this.editors].some((editor) => editor instanceof GroupManager)) return;
           const editor = new GroupManager(this); this.editors.add(editor); editor.open();
         };
-        controls.append(sort.wrapper, hideLabel, label, manage); toolbar.append(searchLabel, controls);
+        controls.append(sort.wrapper, statusSelect.wrapper, groupFilter.wrapper, manage);
+        toolbar.append(searchLabel, controls);
+        const stats = element(doc, "div", "pzn-list-stats");
+        const statsTotal = element(doc, "span", "pzn-stat pzn-stat-total");
+        const statsEnabled = element(doc, "span", "pzn-stat pzn-stat-enabled");
+        const statsDisabled = element(doc, "span", "pzn-stat pzn-stat-disabled");
+        const statsUpdate = element(doc, "span", "pzn-stat pzn-stat-update");
+        stats.append(statsTotal, statsEnabled, statsDisabled, statsUpdate);
         const status = element(doc, "div", "pzn-manager pzn-list-status");
-        status.setAttribute("role", "status"); toolbar.append(status);
-        list = { toolbar, sort, search, toggle, hideDisabled, status, nativeSearch, headers: [], items: new Map() };
+        status.setAttribute("role", "status"); toolbar.append(stats, status);
+        list = { toolbar, sort, search, statusSelect, groupFilter, statsTotal, statsEnabled, statsDisabled, statsUpdate,
+          status, nativeSearch, headers: [], items: new Map() };
         state.lists.set(parent, list);
         search.oninput = () => this.refreshDocument(doc);
         sort.select.onchange = () => this.managementAction(() => this.saveManagement((v) => ({ ...v, listSort: sort.select.value })));
-        toggle.onchange = () => this.managementAction(() => this.saveManagement((v) => ({ ...v, grouped: toggle.checked })));
-        hideDisabled.onchange = () => this.managementAction(() => this.saveManagement((v) => ({ ...v, hideDisabled: hideDisabled.checked })));
+        statusSelect.select.onchange = () => this.managementAction(() => this.saveManagement((v) => ({
+          ...v, statusFilter: statusSelect.select.value, hideDisabled: statusSelect.select.value === "enabled" })));
+        groupFilter.select.onchange = () => this.managementAction(() => this.saveManagement((v) => ({
+          ...v, groupFilter: groupFilter.select.value })));
       }
       if (!parent.contains(list.toolbar)) parent.prepend(list.toolbar);
       list.nativeSearch?.classList.add("pzn-native-search");
       parent.classList.add("pzn-ordered", "pzn-plugin-list");
-      list.sort.select.value = m.listSort; list.toggle.checked = m.grouped; list.hideDisabled.checked = m.hideDisabled;
+      list.sort.select.value = m.listSort;
+      const updates = this.updateIndex || Object.create(null);
       const rows = [...parent.children].filter((e) => e.matches(ROW_SELECTOR));
+      // 待更新数量：数据源 + 原生按钮双重判定，任一命中即算待更新
+      const updateVersions = new Map();
+      for (const row of rows) {
+        const version = updateVersionOf(row, updates);
+        if (version) updateVersions.set(row, version);
+      }
+      // 状态选项带计数，让「待更新」不至于点了才知道有没有
+      setSelectOptions(list.statusSelect.select, [
+        ["all", "全部"],
+        ["enabled", `已启用 ${rows.filter((row) => rowEnabled(row)).length}`],
+        ["disabled", `已禁用 ${rows.filter((row) => !rowEnabled(row)).length}`],
+        ["update", updateVersions.size > 0 ? `待更新 ${updateVersions.size}` : "待更新"],
+      ]);
+      list.statusSelect.select.value = m.statusFilter;
+      setSelectOptions(list.groupFilter.select, [["all", "全部分组"], ["", "未分组"],
+        ...m.groups.map((g) => [g.id, g.name])]);
+      list.groupFilter.select.value = m.groupFilter;
       for (const [row, saved] of list.items) if (!rows.includes(row)) {
         row.style.order = saved.order; row.classList.remove("pzn-row-hidden"); list.items.delete(row);
       }
+      // 统计行反映全量状态，不随过滤条件变化（与 Better Manager 的 总计/启用/禁用 一致）
+      let enabledCount = 0;
+      for (const row of rows) if (rowEnabled(row)) enabledCount += 1;
+      list.statsTotal.textContent = `总计 ${rows.length}`;
+      list.statsEnabled.textContent = `启用 ${enabledCount}`;
+      list.statsDisabled.textContent = `禁用 ${rows.length - enabledCount}`;
+      list.statsUpdate.textContent = `待更新 ${updateVersions.size}`;
+      list.statsUpdate.hidden = updateVersions.size === 0;
+
       const query = list.search.value.trim().toLowerCase();
+      const statusOk = (row) => {
+        if (m.statusFilter === "all") return true;
+        if (m.statusFilter === "update") return updateVersions.has(row);
+        return m.statusFilter === "enabled" ? rowEnabled(row) : !rowEnabled(row);
+      };
+      const matchesQuery = (item) => {
+        if (!query) return true;
+        const alias = getNote(this.data, item.id).alias || "";
+        const description = this.mounts.get(item.row)?.description?.textContent || "";
+        return `${item.name} ${alias} ${description}`.toLowerCase().includes(query);
+      };
       const sortable = rows.map((row, index) => {
         if (!list.items.has(row)) list.items.set(row, { order: row.style.order });
         const id = row.dataset.pluginId, mount = this.mounts.get(row), meta = this.managementCatalog.get(id);
-        return { row, id, name: meta?.name || mount?.originalName || id, ctime: meta?.ctime, index };
+        return { row, id, name: meta?.name || mount?.originalName || id, ctime: meta?.ctime, mtime: meta?.mtime, index };
       });
       const sorted = sortPlugins(sortable, m.listSort);
       for (const h of list.headers) h.remove(); list.headers = [];
-      const buckets = m.grouped ? [...m.groups, { id: "", name: "未分组" }] : [{ id: null }];
-      let order = 0, matches = 0, visibleIndex = 0;
-      for (const group of buckets) {
-        const items = sorted.filter((item) => group.id === null || (m.assignments[item.id] || "") === group.id);
-        const found = items.filter((item) => (!m.hideDisabled || rowEnabled(item.row)) &&
-          (!query || `${item.name} ${getNote(this.data, item.id).alias}`.toLowerCase().includes(query)));
-        matches += found.length;
-        const collapsed = !query && m.collapsed.includes(group.id);
-        if (m.grouped && (!query || found.length)) {
-          const heading = element(doc, "button", "pzn-manager pzn-group-heading");
-          heading.type = "button"; heading.style.order = String(order++);
-          heading.setAttribute("aria-expanded", String(!collapsed));
-          heading.append(element(doc, "span", "pzn-group-arrow", collapsed ? "›" : "⌄"), element(doc, "span", "", group.name),
-            element(doc, "span", "pzn-group-count", String(found.length)));
-          heading.onclick = () => this.managementAction(() => this.saveManagement((v) => ({ ...v,
-            collapsed: v.collapsed.includes(group.id) ? v.collapsed.filter((id) => id !== group.id) : [...v.collapsed, group.id] })));
-          parent.append(heading); list.headers.push(heading);
-        }
-        for (const item of items) {
-          item.row.style.order = String(order++);
-          const visible = !collapsed && found.includes(item);
-          item.row.classList.toggle("pzn-row-hidden", !visible);
-          const number = this.mounts.get(item.row)?.number;
-          if (number) {
-            number.hidden = !visible;
-            if (visible) number.textContent = String(++visibleIndex).padStart(2, "0");
-          }
+      // 分组下拉只作为过滤器：选「全部分组」直接平铺全部插件，不再插入分组标题行
+      const scoped = m.groupFilter === "all" ? null : m.groupFilter;
+      const inGroup = (item) => scoped === null || (m.assignments[item.id] || "") === scoped;
+      const found = new Set(sorted.filter((item) => inGroup(item) && statusOk(item.row) && matchesQuery(item)));
+      const matches = found.size;
+      // 必须遍历全部行：只遍历「组内行」的话，别的分组的行永远拿不到 pzn-row-hidden，
+      // 分组筛选就会变成"只是把本组重新排了一遍"，搜索/状态筛选也跟着只在组内生效。
+      let order = 0, visibleIndex = 0;
+      for (const item of sorted) {
+        item.row.style.order = String(order++);
+        const visible = found.has(item);
+        item.row.classList.toggle("pzn-row-hidden", !visible);
+        const number = this.mounts.get(item.row)?.number;
+        if (number) {
+          number.hidden = !visible;
+          if (visible) number.textContent = String(++visibleIndex).padStart(2, "0");
         }
       }
-      list.status.textContent = matches === 0 ? "没有找到匹配的插件。" :
-        ["new", "old"].includes(m.listSort) ? "按文件夹创建时间排序；时间未知的插件置后。复制、恢复或同步可能改变时间。" : "";
-      list.status.hidden = !list.status.textContent;
+      let message = "";
+      if (matches === 0) {
+        message = m.statusFilter === "update" && updateVersions.size === 0
+          ? "没有检测到待更新的插件。点上方「检查更新」拉取最新版本信息。"
+          : "没有找到匹配的插件。";
+      } else if (["new", "old"].includes(m.listSort)) {
+        message = "按插件文件更新时间排序；时间未知的插件置后。重新安装或手动覆盖插件文件会刷新该时间。";
+      } else if (m.statusFilter === "update") {
+        message = `${updateVersions.size} 个插件有新版本，点卡片上的「更新」按钮即可升级。`;
+      }
+      list.status.textContent = message;
+      list.status.hidden = !message;
     }
   }
 
   cleanSide(parent, side) {
-    parent.classList.remove("pzn-ordered"); side.sort.wrapper.remove();
+    parent.classList.remove("pzn-ordered"); side.filter.remove();
     for (const [item, saved] of side.items) {
       saved.alias.remove(); saved.number.remove(); saved.title.classList.remove("pzn-side-numbered");
-      saved.translate?.remove(); item.style.order = saved.order;
+      item.classList.remove("pzn-side-hidden");
+      item.style.order = saved.order;
     }
   }
 
@@ -2375,7 +2880,6 @@ class PluginChineseNotes extends Plugin {
     const originalName = [...nameEl.childNodes]
       .filter((node) => node.nodeType === 3).map((node) => node.textContent).join("").trim() || id;
     const alias = element(doc, "span", "pzn-alias");
-    nameEl.insertBefore(alias, nameEl.firstElementChild);
     const box = element(doc, "div", "pzn-note");
     const description = element(doc, "div", "pzn-description");
     const origin = element(doc, "div", "pzn-source");
@@ -2383,7 +2887,9 @@ class PluginChineseNotes extends Plugin {
     edit.type = "button";
     setIcon(edit, "pencil");
     edit.append(element(doc, "span", "pzn-sr-only", "编辑中文备注"));
-    alias.after(edit);
+    // 铅笔紧贴插件名，别名单独占一行（放在 nameEl 末尾 + CSS flex-basis:100% 换行）
+    nameEl.insertBefore(edit, nameEl.firstElementChild);
+    nameEl.append(alias);
     box.append(description, origin);
     // Stop the host's info-area click from opening the community store.
     const stop = (event) => event.stopPropagation();
@@ -2410,14 +2916,64 @@ class PluginChineseNotes extends Plugin {
       box.append(details);
     }
     const control = row.querySelector(".setting-item-control");
+    // ── 卡片化附加件：版本号 + 状态徽标（名称行右侧）、安装/更新时间（描述下方）、设置跳转 ──
+    const version = element(doc, "span", "pzn-card-version");
+    const updateChip = element(doc, "span", "pzn-card-update");
+    const badge = element(doc, "span", "pzn-card-badge");
+    // 徽标本身是「查看更新说明」的入口：键盘也能触发（Enter / 空格）
+    updateChip.setAttribute("role", "button");
+    updateChip.tabIndex = -1;
+    updateChip.addEventListener("contextmenu", stop);
+    updateChip.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!updateChip.classList.contains("is-clickable")) return;
+      this.openReleaseNotes(id);
+    });
+    updateChip.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (updateChip.classList.contains("is-clickable")) this.openReleaseNotes(id);
+    });
+    nameEl.append(version, updateChip, badge);
+    const dates = element(doc, "div", "pzn-card-dates");
+    const installed = element(doc, "span", "pzn-card-date");
+    const updated = element(doc, "span", "pzn-card-date");
+    dates.append(installed, updated);
+    const gear = element(doc, "button", "pzn-card-settings clickable-icon");
+    gear.type = "button";
+    setIcon(gear, "settings");
+    gear.append(element(doc, "span", "pzn-sr-only", `打开 ${originalName} 的设置`));
+    gear.addEventListener("contextmenu", stop);
+    gear.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.openPluginSettings(id);
+    });
     const groupLabel = element(doc, "label", "pzn-row-group pzn-manager");
     groupLabel.append(element(doc, "span", "pzn-sr-only", `${originalName} 所属分组`));
     const groupSelect = element(doc, "select", "dropdown"); groupLabel.append(groupSelect);
     groupSelect.onclick = (event) => event.stopPropagation();
     groupSelect.onchange = () => this.managementAction(() => this.saveManagement((m) => ({ ...m,
       assignments: Object.assign(Object.create(null), m.assignments, { [id]: groupSelect.value }) })));
+    // 「更新说明」：贴在原生「更新」按钮左边（同一行，先看不下载）
+    const notesButton = element(doc, "button", "pzn-release-button pzn-manager", "更新说明");
+    notesButton.type = "button";
+    notesButton.title = "查看这次更新改了什么";
+    notesButton.addEventListener("contextmenu", stop);
+    notesButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.openReleaseNotes(id);
+    });
+    control?.prepend(gear);
     control?.prepend(groupLabel);
-    const mount = { id, row, originalName, nameEl, number, alias, edit, box, description, origin, original, marker, details, groupLabel, groupSelect };
+    // 安装/更新时间移到卡片底部左侧：塞进控制区最前面，由 CSS 的 margin-inline-end:auto 推到左边
+    if (control) control.prepend(dates);
+    else box.after(dates);
+    const mount = { id, row, originalName, nameEl, number, alias, edit, box, description, origin, original, marker,
+      details, groupLabel, groupSelect, notesButton, version, updateChip, badge, dates, installed, updated, gear };
     this.mounts.set(row, mount);
     return mount;
   }
@@ -2437,12 +2993,53 @@ class PluginChineseNotes extends Plugin {
     if (!mount.row.contains(mount.number)) mount.row.prepend(mount.number);
     const control = mount.row.querySelector(".setting-item-control");
     if (control && !control.contains(mount.groupLabel)) control.prepend(mount.groupLabel);
+    if (control && !control.contains(mount.gear)) control.prepend(mount.gear);
     // The declarative settings renderer may reset only the title's children.
-    if (!mount.nameEl.contains(mount.alias)) mount.nameEl.insertBefore(mount.alias, mount.nameEl.firstElementChild);
-    if (!mount.nameEl.contains(mount.edit)) mount.alias.after(mount.edit);
+    if (!mount.nameEl.contains(mount.edit)) mount.nameEl.insertBefore(mount.edit, mount.nameEl.firstElementChild);
+    if (!mount.nameEl.contains(mount.alias)) mount.nameEl.append(mount.alias);
+    if (!mount.nameEl.contains(mount.version)) mount.nameEl.append(mount.version, mount.badge);
+    if (!mount.nameEl.contains(mount.updateChip)) mount.version.after(mount.updateChip);
+    const controlNow = mount.row.querySelector(".setting-item-control");
+    if (controlNow) { if (!controlNow.contains(mount.dates)) controlNow.prepend(mount.dates); }
+    else if (!mount.row.contains(mount.dates)) mount.box.after(mount.dates);
+    // 卡片元信息：状态徽标 / 版本 / 安装与更新时间（来自插件文件夹 stat）
+    const meta = this.managementCatalog.get(mount.id);
+    const enabled = rowEnabled(mount.row);
+    const badgeText = enabled ? "启用中" : "已禁用";
+    if (mount.badge.textContent !== badgeText) mount.badge.textContent = badgeText;
+    mount.badge.classList.toggle("is-enabled", enabled);
+    const versionText = meta?.version ? `v${meta.version}` : "";
+    mount.version.textContent = versionText;
+    // 原生行已经渲染过版本号（span.u-numeric）时不再重复，避免标题行拥挤
+    mount.version.hidden = !versionText || Boolean(mount.nameEl.querySelector(":scope > .u-numeric"));
+    // 待更新提示：有新版时在版本号后挂一个橙色小徽标（原生「更新」按钮仍在控件区可用）
+    const updateVersion = updateVersionOf(mount.row, this.updateIndex || Object.create(null));
+    const updateText = updateVersion && updateVersion !== "?" ? `↑ v${updateVersion}` : "待更新";
+    mount.updateChip.textContent = updateVersion ? updateText : "";
+    mount.updateChip.hidden = !updateVersion;
+    // 能定位到仓库 + 目标版本时，徽标才可点（点开看更新说明）
+    const updatable = Boolean(updateVersion) && Boolean(updateTargetOf(this.app, mount.id));
+    mount.updateChip.classList.toggle("is-clickable", updatable);
+    mount.updateChip.tabIndex = updatable ? 0 : -1;
+    mount.updateChip.setAttribute("aria-label", updatable ? `查看 ${mount.originalName} 的更新说明` : "");
+    mount.updateChip.title = updateVersion
+      ? (updatable
+        ? (updateVersion !== "?" ? `可更新至 v${updateVersion}，点击查看更新说明` : "有新版本可用，点击查看更新说明")
+        : (updateVersion !== "?" ? `可更新至 v${updateVersion}` : "有新版本可用"))
+      : "";
+    // 「更新说明」按钮贴着原生「更新」按钮：没有原生更新按钮时可读性差，就整颗隐藏
+    const nativeUpdate = updatable ? rowUpdateButton(mount.row) : null;
+    if (nativeUpdate && nativeUpdate.parentElement) {
+      if (mount.notesButton.nextElementSibling !== nativeUpdate) nativeUpdate.before(mount.notesButton);
+    } else if (mount.notesButton.isConnected) {
+      mount.notesButton.remove();
+    }
+    mount.installed.textContent = `安装时间：${formatDate(meta?.ctime)}`;
+    mount.updated.textContent = `更新时间：${formatDate(meta?.mtime)}`;
     const note = getNote(this.data, mount.id);
     const translatedName = displayAlias(note.alias, mount.originalName);
-    const alias = translatedName ? ` · ${translatedName} ` : "";
+    // 别名独占一行，不再用「 · 」拼在插件名后面
+    const alias = translatedName || "";
     if (mount.alias.textContent !== alias) mount.alias.textContent = alias;
     mount.alias.hidden = !alias;
     const originalText = mount.original?.textContent || "";
@@ -2465,6 +3062,11 @@ class PluginChineseNotes extends Plugin {
     mount.edit.remove();
     mount.box.remove();
     mount.groupLabel.remove();
+    mount.notesButton.remove();
+    mount.gear.remove();
+    mount.dates.remove();
+    mount.version.remove();
+    mount.badge.remove();
     this.mounts.delete(row);
   }
 
