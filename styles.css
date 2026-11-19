@@ -275,9 +275,6 @@
 .pzn-free-card > .pzn-muted { margin-bottom: 18px; }
 .pzn-free-card .pzn-result-status { margin-top: auto; padding-top: 3px; }
 .pzn-free-card .pzn-primary { margin-top: 13px; }
-.pzn-entry-hint { display: flex; align-items: center; gap: 7px; margin-top: auto; padding-top: 3px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
-.pzn-entry-icon { display: inline-flex; }
-.pzn-entry-icon svg { width: 14px; height: 14px; }
 .pzn-quota { padding: 16px 20px; margin-bottom: 12px; border-radius: 10px; background: var(--background-secondary); }
 .pzn-quota-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: var(--font-ui-smaller); }
 .pzn-quota-header > :last-child { color: var(--text-muted); font-variant-numeric: tabular-nums; }
@@ -594,42 +591,6 @@
   .pzn-sort-label select { max-width: 170px; }
 }
 
-/* Settings translation: scoped controls, independent from aliases and notes. */
-.pzn-ui-translate {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
-  padding: 4px;
-  margin-inline-start: auto;
-  color: var(--text-faint);
-  box-shadow: none;
-  background: transparent;
-  border: 0;
-}
-.pzn-ui-translate svg { width: 13px; height: 13px; }
-.pzn-ui-translate:hover, .pzn-ui-translate:focus-visible, .pzn-ui-translate[aria-expanded="true"] { color: var(--text-muted); background: transparent; }
-.pzn-ui-popover {
-  position: fixed;
-  z-index: var(--layer-popover, 1000);
-  width: min(310px, calc(100vw - 16px));
-  max-height: calc(100vh - 16px);
-  overflow: auto;
-  padding: 18px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-s);
-  background: var(--background-primary);
-  color: var(--text-normal);
-  font-size: var(--font-ui-small);
-}
-.pzn-ui-popover-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.pzn-ui-popover .pzn-ui-close { width: auto; margin: 0; padding: 0 4px; border: 0; background: transparent; box-shadow: none; }
-.pzn-ui-popover > button { display: block; width: 100%; margin-top: 8px; }
-.pzn-ui-scope { padding: 10px; border-radius: 6px; background: var(--background-secondary); font-size: var(--font-ui-smaller); }
-.pzn-ui-popover .pzn-muted { font-size: var(--font-ui-smaller); }
-
-.pzn-free-choice { flex-wrap: wrap; }
 
 /* ── 卡片网格（Better Manager 风格）：一行两个插件，含状态徽标与时间 ────────── */
 
