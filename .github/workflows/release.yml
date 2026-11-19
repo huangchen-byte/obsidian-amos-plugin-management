@@ -80,19 +80,37 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$VERSION" >/dev/null 2>&1; then
-            echo "Release $VERSION 已存在，不覆盖已有产物" >&2
+          # Obsidian 与 BRAT 只认 Release 里直接挂的 main.js / manifest.json / styles.css，
+          # GitHub 自动附带的 Source code.zip 不能当插件包用。
+          EXISTING=$(gh release view "$VERSION" --json isDraft --jq '.isDraft' 2>/dev/null || echo "missing")
+          if [ "$EXISTING" = "false" ]; then
+            echo "Release $VERSION 已正式发布，不覆盖已有产物" >&2
             exit 1
           fi
-          gh release create "$VERSION" \
-            main.js manifest.json styles.css \
-            --verify-tag \
-            --title "Extension Index $VERSION" \
-            --notes-file release-notes.md \
-            --latest
+          if [ "$EXISTING" = "true" ]; then
+            echo "发现同名草稿 Release，补齐三件套后发布"
+            gh release upload "$VERSION" main.js manifest.json styles.css --clobber
+            gh release edit "$VERSION" \
+              --draft=false \
+              --title "Amos Extension Manager $VERSION" \
+              --notes-file release-notes.md \
+              --latest
+          else
+            gh release create "$VERSION" \
+              main.js manifest.json styles.css \
+              --verify-tag \
+              --title "Amos Extension Manager $VERSION" \
+              --notes-file release-notes.md \
+              --latest
+          fi
 
       - name: Verify uploaded assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release view "$VERSION" --json tagName,isDraft,assets \
-          --jq '"tag=\(.tagName) draft=\(.isDraft)", (.assets[] | "\(.name) \(.size) bytes")'
+        run: |
+          gh release view "$VERSION" --json tagName,isDraft,assets \
+            --jq '"tag=\(.tagName) draft=\(.isDraft)", (.assets[] | "\(.name) \(.size) bytes")'
+          for f in main.js manifest.json styles.css; do
+            gh release view "$VERSION" --json assets --jq '.assets[].name' | grep -qx "$f" \
+              || { echo "缺少产物 $f" >&2; exit 1; }
+          done
