@@ -191,7 +191,8 @@ npm test        # Node 内置测试运行器
 
 - 测试覆盖排序/筛选/分组、数据迁移、翻译与 AI 响应解析、Release 说明解析、构建产物一致性等，当前 91 项全部通过。
 - 修改 `src/plugin.js` 后必须重新 `npm run build`，否则「构建一致」测试会失败。
-- 发布由自动化创建**草稿** Release，tag 使用 `manifest.json` 的版本号；桌面验收在独立 QA 库完成，自动化测试不能替代真实界面检查。
+- 发版靠打 tag：`manifest.json` 改好版本、`CHANGELOG.md` 补好该版本段落，推一个同名 tag（如 `0.7.0`，不带 `v`）即可。工作流会重新构建、跑测试、确认提交的产物未被改动，再用该版本的 CHANGELOG 段落作为 Release 说明，上传 `main.js`、`manifest.json`、`styles.css`。
+- 桌面验收在独立 QA 库完成，自动化测试不能替代真实界面检查。
 
 ## 许可与署名
 

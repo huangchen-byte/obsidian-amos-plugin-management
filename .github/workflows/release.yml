@@ -1,34 +1,78 @@
-name: Prepare draft release
+name: Release on version tag
+
+# 打 tag 即发版：push 形如 0.7.0 的 tag → 校验 → 构建 → 用 tag 创建正式 Release 并上传三个产物。
+# 约定：tag 名必须与 manifest.json 的 version 完全一致，且不带 v 前缀。
+# 只匹配数字开头的 tag，避免误推 v0.7.0 之类的分支/标签触发。
 
 on:
-  workflow_dispatch:
+  push:
+    tags: ['[0-9]*']
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
-  draft:
+  release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+          # 需要历史与 tag 才能找到上一个版本，用于生成 compare 链接。
+          fetch-depth: 0
+          fetch-tags: true
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
+
+      # 产物必须由源码重现：安装、构建、测试、比对，与 ci.yml 保持一致。
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm test
-      - run: git diff --exit-code -- main.js manifest.json styles.css
-      - name: Prepare draft, never publish automatically
+      - name: Verify committed release assets did not change
+        run: git diff --exit-code -- main.js manifest.json styles.css
+
+      - name: Check tag matches manifest version
+        run: |
+          VERSION=$(node -p "require('./manifest.json').version")
+          if [ "$GITHUB_REF_NAME" != "$VERSION" ]; then
+            echo "tag $GITHUB_REF_NAME 与 manifest.json 的 $VERSION 不一致，已中止发版" >&2
+            exit 1
+          fi
+
+      # 正文取自 CHANGELOG.md 的对应段落；缺失或为空时直接失败，避免发出空白说明。
+      - name: Build release notes from CHANGELOG
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          PREVIOUS_TAG="$PREVIOUS_TAG" node scripts/release-notes.cjs "$GITHUB_REF_NAME" > release-notes.md
+          echo "----- release-notes.md -----"
+          cat release-notes.md
+
+      - name: Create release with plugin assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(node -p "require('./manifest.json').version")
+          VERSION="$GITHUB_REF_NAME"
           if gh release view "$VERSION" >/dev/null 2>&1; then
-            echo "A release for this version already exists; refusing to replace assets."
+            echo "Release $VERSION 已存在，不覆盖已有产物" >&2
             exit 1
           fi
-          gh release create "$VERSION" main.js manifest.json styles.css \
-            --target "$GITHUB_SHA" --title "$VERSION" \
-            --notes-file CHANGELOG.md --draft
+          gh release create "$VERSION" \
+            main.js manifest.json styles.css \
+            --verify-tag \
+            --title "Extension Index $VERSION" \
+            --notes-file release-notes.md \
+            --latest
+
+      - name: Verify uploaded assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view "$GITHUB_REF_NAME" --json tagName,isDraft,assets \
+          --jq '"tag=\(.tagName) draft=\(.isDraft)", (.assets[] | "\(.name) \(.size) bytes")'
